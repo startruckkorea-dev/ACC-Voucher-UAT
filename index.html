@@ -159,6 +159,23 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
   padding:3px 12px; font-size:11px; font-weight:700; letter-spacing:.2px;
   transition:all .12s ease;
 }
+/* ── 추가 결재자 안내 (접이식) ── */
+.appr-help{ margin-top:9px; padding-top:8px; border-top:1px dashed #c7e0f4; }
+.appr-help > summary{
+  list-style:none; cursor:pointer; display:flex; align-items:center; gap:6px;
+  font-size:11px; font-weight:700; color:#0b5fa5; user-select:none; padding:1px 0;
+}
+.appr-help > summary::-webkit-details-marker{ display:none; }
+.appr-help > summary:hover{ text-decoration:underline; }
+.appr-help .chev{ font-size:9px; line-height:1; transition:transform .15s ease; display:inline-block; }
+.appr-help[open] .chev{ transform:rotate(90deg); }
+.appr-help .used{ margin-left:auto; font-weight:600; color:#8a6116; background:#fdf6e3;
+  border:1px solid #f0d9a0; border-radius:9px; padding:1px 8px; font-size:10px; }
+.appr-help-body{ margin-top:7px; font-size:11px; line-height:1.55; color:#605e5c; }
+.appr-help-body table{ width:100%; border-collapse:collapse; font-size:11px; line-height:1.5; }
+.appr-help-body td{ padding:4px 8px; border-bottom:1px solid #dbe7f3; vertical-align:top; }
+.appr-help-body td.k{ padding:4px 10px 4px 0; white-space:nowrap; font-weight:700; color:#0b5fa5; }
+.appr-help-body tr:last-child td{ border-bottom:none; }
 .appr-insert.is-full{ cursor:default; }
 .appr-insert.is-full .appr-insert-line{ border-top-color:#e1e1e1; }
 .appr-insert.is-full .appr-insert-btn{ color:#a19f9d; border-color:#dcdcdc; border-style:solid; font-weight:600; }
@@ -916,6 +933,8 @@ const canInsertAfter = role => BU_ROLES.includes(role) && !NO_INSERT_AFTER.inclu
 // Approvals.ApproverRole 에 저장되는 값. 이 컬럼은 평문(단일 텍스트)이라 코드가 아닌 표기 문구를 그대로 넣는다.
 // 다른 역할은 TL/MC 같은 짧은 코드지만, 추가 결재자는 알림 메일과 APS 포털에서 별도 매핑 없이 읽혀야 하므로 예외를 둔다.
 const EXTRA_ROLE = 'Extra Approver';
+// 안내 펼침 상태. renderApproval()이 자주 다시 그리므로 보관해 두지 않으면 매번 접힌다.
+let _apprHelpOpen = false;
 // 날짜전용 필드(InvoiceDate 등)를 KST 보정 후 YYYY-MM-DD로 표시 — SharePoint가 순수 날짜를 UTC 자정으로 해석해 저장하는 경우
 // 단순 slice(0,10)만 하면 하루 당겨져 보일 수 있어(SSC에서 동일 버그 발견/수정 이력 있음), 항상 이 함수를 통해 표시
 function fmtDateOnly(iso){
@@ -2292,17 +2311,21 @@ function renderApproval() {
       return `<span class="line-step"><span class="line-step-badge ${cls}" ${isEx?'style="background:#d9a41a"':''}>${i+1}차</span><span style="font-size:.75rem">${label}</span>${i<merged.length-1?'<span class="line-arrow">→</span>':''}</span>`;
     }).join('')+
     `</div>`+
-    `<div style="margin-top:9px;padding-top:8px;border-top:1px dashed #c7e0f4;font-size:11px;line-height:1.55;color:#605e5c">
-      <div style="font-weight:700;color:#0b5fa5;margin-bottom:2px">Adding an Additional Approver</div>
-      <div style="margin-bottom:5px">Approval requirements differ by department. If your department requires approval beyond the standard line above,
-      click the dashed <span style="color:#0078d4;font-weight:700">＋ 결재자 추가</span> line below to insert an additional approver at that exact position.</div>
-      <table style="width:100%;border-collapse:collapse;font-size:11px;line-height:1.5">
-        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Where</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Within BU approval only — after Team Lead, and up to the step before RD. Accounting review steps are fixed by policy.</td></tr>
-        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">How</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Select Department → Team → Employee, the same way as the 1st and 2nd approver.</td></tr>
-        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Order</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Approval runs top to bottom. Later steps shift down by one, and each approver is notified only after the previous step is approved.</td></tr>
-        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Scope</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Applies to this voucher only. Use <span style="color:#a4262c;font-weight:700">✕ 삭제</span> to remove it before submitting.</td></tr><tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Limit</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:topborder-bottom:none">Up to <b>${MAX_EXTRA}</b> additional approvers per voucher (<b>${extraApprovers.length} of ${MAX_EXTRA}</b> used). Once the limit is reached, the dashed lines are disabled until you remove one.</td></tr>
-      </table>
-    </div>`;
+    `<details class="appr-help" ${_apprHelpOpen?'open':''} ontoggle="_apprHelpOpen=this.open">
+      <summary><span class="chev">▶</span>Adding an Additional Approver
+        <span class="used">${extraApprovers.length} of ${MAX_EXTRA} used</span></summary>
+      <div class="appr-help-body">
+        <div style="margin-bottom:5px">Approval requirements differ by department. If your department requires approval beyond the standard line above,
+        click the dashed <span style="color:#0078d4;font-weight:700">＋ 결재자 추가</span> line below to insert an additional approver at that exact position.</div>
+        <table>
+          <tr><td class="k">Where</td><td>Within BU approval only — after Team Lead, and up to the step before RD. Accounting review steps are fixed by policy.</td></tr>
+          <tr><td class="k">How</td><td>Select Department → Team → Employee, the same way as the 1st and 2nd approver.</td></tr>
+          <tr><td class="k">Order</td><td>Approval runs top to bottom. Later steps shift down by one, and each approver is notified only after the previous step is approved.</td></tr>
+          <tr><td class="k">Scope</td><td>Applies to this voucher only. Use <span style="color:#a4262c;font-weight:700">✕ 삭제</span> to remove it before submitting.</td></tr>
+          <tr><td class="k">Limit</td><td>Up to <b>${MAX_EXTRA}</b> additional approvers per voucher. Once the limit is reached, the dashed lines are disabled until you remove one.</td></tr>
+        </table>
+      </div>
+    </details>`;
 
   const depts=[...new Set((window._employeeData||[]).map(e=>e.dept))].sort();
   const deptOpts=depts.map(d=>`<option value="${escHtmlAttr(d)}">${escHtmlAttr(d)}</option>`).join('');
