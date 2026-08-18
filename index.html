@@ -3357,7 +3357,12 @@ async function saveVoucher(status) {
     }
 
     // 2. 첨부파일 업로드 → AttachedFiles/ACC-Voucher_AttachedFiles/{voucherId}/
+    //    파일 업로드(라이브러리)와 전표 연결(AttachmentRef PATCH)은 별개 호출이라,
+    //    업로드는 됐는데 연결만 실패하면 라이브러리에 파일은 있고 화면엔 "첨부파일 없음"으로 보인다.
+    //    예전에는 이 실패를 콘솔에만 남겨 사용자가 알 방법이 없었다. 이제는 상신 완료 안내에 함께 알린다.
+    let _attWarn = '';
     if(accFiles.length){
+      const _failedUploads = [];
       try{
         const drivesData=await api(`/sites/${siteId}/drives`);
         const drive=drivesData.value.find(d=>d.name==='AttachedFiles')||drivesData.value[0];
@@ -3374,13 +3379,30 @@ async function saveVoucher(status) {
               const u=await res.json();
               const safeKey=btoa(unescape(encodeURIComponent(drive.id+'###'+u.id)));
               links.push(file.name+'||ENC||'+safeKey);
+            } else {
+              _failedUploads.push(file.name);
+              console.error('[첨부] 업로드 실패:', file.name, res.status);
             }
-          }catch(fe){console.error('File upload error:',fe);}
+          }catch(fe){ _failedUploads.push(file.name); console.error('[첨부] 업로드 오류:', file.name, fe && fe.message); }
         }
         if(links.length){
-          await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${requestId}/fields`,'PATCH',{AttachmentRef:links.join(';')});
+          try{
+            await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${requestId}/fields`,'PATCH',{AttachmentRef:links.join(';')});
+          }catch(pe){
+            // 파일은 올라갔는데 전표 연결만 실패한 경우 — 데이터는 남아 있으므로 복구 가능하다.
+            console.error('[첨부] 전표 연결 실패:', pe && pe.message);
+            _attWarn = `파일 ${links.length}건은 업로드됐지만 전표에 연결되지 않았습니다.\n`
+                     + `상세보기에 "첨부파일 없음"으로 표시됩니다. IT팀(stk_it@hyosung.com)에 Voucher ID를 알려주세요.`;
+          }
         }
-      }catch(fe){console.error('Drive error:',fe);}
+        if(_failedUploads.length){
+          _attWarn = (_attWarn ? _attWarn + '\n\n' : '')
+                   + `다음 파일은 업로드되지 않았습니다: ${_failedUploads.join(', ')}\n다시 첨부해 주세요.`;
+        }
+      }catch(fe){
+        console.error('[첨부] 처리 실패:', fe && fe.message);
+        _attWarn = '첨부파일이 저장되지 않았습니다. 전표는 정상 상신되었으니 IT팀에 문의해 주세요.';
+      }
     }
 
     // 3. 대기 상태면 Approvals에 결재자 행 INSERT (1번째만 '대기', 나머지는 '대기(잠김)')
@@ -3402,7 +3424,8 @@ async function saveVoucher(status) {
       }
     }
 
-    showAccAlert('결재 요청이 완료되었습니다.', 'Voucher ID: '+voucherId, '✅');
+    showAccAlert(_attWarn ? '상신되었으나 첨부파일 확인이 필요합니다.' : '결재 요청이 완료되었습니다.',
+      'Voucher ID: '+voucherId + (_attWarn ? '\n\n⚠️ '+_attWarn : ''), _attWarn ? '⚠️' : '✅');
     resetForm(); await loadMyList(); switchTab('list');
   } catch(e) {
     console.error('saveVoucher error:', e);
