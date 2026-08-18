@@ -1402,6 +1402,17 @@ function isMe(email) {
 
 async function boot(account) {
   user = account;
+  // 로그인 계정의 실제 메일 주소를 Graph에서 확인한다.
+  // account.username은 UPN이라, 외부 게스트(B2B)는 name_domain#EXT#@tenant.onmicrosoft.com 형태가 되어
+  // system_config의 명단(회사 메일 형식)과 대조되지 않는다. me.mail을 우선 채택해 내부·외부 계정을 같은 방식으로 다룬다.
+  // 실패해도 기존 동작(UPN 사용)으로 떨어지므로 내부 계정에는 영향이 없다.
+  try {
+    const _me = await api('/me?$select=mail,userPrincipalName,displayName');
+    user.email = ((_me && (_me.mail || _me.userPrincipalName)) || account.username || '').toLowerCase();
+  } catch(e) {
+    console.warn('[Auth] Graph /me 조회 실패, UPN으로 대체:', e && e.message);
+    user.email = (account.username || '').toLowerCase();
+  }
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='block';
   // ?openId= 단독 모드: 인증이 끝나는 즉시 로더를 띄운다.
@@ -1413,7 +1424,8 @@ async function boot(account) {
 
   document.getElementById('app').style.maxWidth='960px';
   document.getElementById('app-header').style.display='flex';
-  document.getElementById('user-name').textContent=(account.name||account.username)+' ('+(account.username)+')';
+  // 괄호 안은 권한 판정에 실제로 쓰이는 주소를 보여준다(게스트는 UPN이 아닌 외부 실주소)
+  document.getElementById('user-name').textContent=(account.name||account.username)+' ('+(user.email||account.username)+')';
   document.getElementById('v-requester').value = account.name||account.username;
   document.getElementById('v-date').value = new Date(new Date().getTime()+9*3600*1000).toISOString().slice(0,10);
   renderApproval();
@@ -4671,7 +4683,7 @@ async function openVoucherSP(spId, fromTab){
         const sepIdx = decoded.indexOf('###');
         driveId = decoded.substring(0, sepIdx);
         itemId = decoded.substring(sepIdx+3);
-      }catch(e){}
+      }catch(e){ console.warn('[첨부] 링크 키 해석 실패:', e && e.message); }
       return `<div style="padding:4px 0;font-size:.8rem"><a href="#" class="file-dl-link" data-drive="${encodeURIComponent(driveId)}" data-id="${encodeURIComponent(itemId)}" data-name="${encodeURIComponent(name)}" style="color:#0078d4;cursor:pointer;text-decoration:none">📎 ${name}</a></div>`;
     }).join('');
   }
@@ -5080,7 +5092,8 @@ async function saveB1DocFromModal() {
     updatePostingBadge();
     const cached = adminListCache.find(x=>x._spId===v._spId);
     if(cached){ cached.B1DocNo = savedB1; cached.PostingDone = v.PostingDone; }
-    try { if(typeof renderAdminList==='function' && adminListCache.length) renderAdminList(); } catch(e){}
+    try { if(typeof renderAdminList==='function' && adminListCache.length) renderAdminList(); }
+    catch(e){ console.warn('[관리자] 목록 재렌더 실패:', e && e.message); }
     showAccAlert('저장되었습니다',
       'B1 Doc No.: ' + (savedB1 || '(없음)') + '\nPosting: ' + (savedB1 ? '완료' : '미완료'), '✅');
   } catch(e) {
