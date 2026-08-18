@@ -903,6 +903,9 @@ let accOverride = null; // Accounting 담당자를 수동으로 변경했을 때
 let extraApprovers = [];
 let _exSeq = 0;
 const BU_ROLES = ['TL','MC','CEO','RD']; // 추가 삽입이 허용되는 구간(회계 검토 구간은 규정상 고정)
+// Approvals.ApproverRole 에 저장되는 값. 이 컬럼은 평문(단일 텍스트)이라 코드가 아닌 표기 문구를 그대로 넣는다.
+// 다른 역할은 TL/MC 같은 짧은 코드지만, 추가 결재자는 알림 메일과 APS 포털에서 별도 매핑 없이 읽혀야 하므로 예외를 둔다.
+const EXTRA_ROLE = 'Extra Approver';
 // 날짜전용 필드(InvoiceDate 등)를 KST 보정 후 YYYY-MM-DD로 표시 — SharePoint가 순수 날짜를 UTC 자정으로 해석해 저장하는 경우
 // 단순 slice(0,10)만 하면 하루 당겨져 보일 수 있어(SSC에서 동일 버그 발견/수정 이력 있음), 항상 이 함수를 통해 표시
 function fmtDateOnly(iso){
@@ -3115,7 +3118,7 @@ async function saveVoucher(status) {
     const missing = approvers.filter(a=>!a.email);
     if(missing.length){
       // 추가 결재자는 사용자가 직접 넣은 칸이므로, 원인을 바로 알 수 있게 따로 안내한다.
-      const exMissing = missing.filter(a=>a.role==='EXTRA');
+      const exMissing = missing.filter(a=>a.role===EXTRA_ROLE);
       if(exMissing.length){
         alert('추가한 결재자 '+exMissing.length+'명의 직원 선택이 비어 있습니다.\n\n'
           +exMissing.map(a=>a.order+'차').join(', ')+' 칸에서 부서 → 팀 → 직원을 선택하거나, 필요 없으면 ✕ 삭제해 주세요.');
@@ -3326,7 +3329,9 @@ function buildApprovers() {
   merged.forEach((m,i)=>{
     const order=i+1;
     if(m.kind==='extra'){
-      result.push({role:'EXTRA', name:m.ex.name||'TBD', email:m.ex.email||'', order});
+      // ApproverRole은 평문 컬럼이라 코드 대신 표기 문구를 그대로 저장한다.
+      // Power Automate 알림 메일의 "Your Role:"과 APS 통합 포털에 별도 매핑 없이 그대로 노출된다.
+      result.push({role: EXTRA_ROLE, name:m.ex.name||'TBD', email:m.ex.email||'', order});
       return;
     }
     const a=m.a, baseOrder=m.baseIdx;
@@ -4815,7 +4820,9 @@ async function loadApprovalHistory(spId){
     AMGR:'Accounting Head', CFO:'CFO',
     ACC_AP:'AP 담당자', ACC_AR:'AR 담당자', ACC_GL:'GL 담당자', ACC:'담당자',
     // 신청자가 BU 승인 구간에 직접 끼워 넣은 결재자
-    EXTRA:'추가 결재자'
+    // 'Extra Approver'는 저장값 자체가 표기 문구라 매핑 없이 그대로 표시된다.
+    // 아래 EXTRA는 표기 변경 전 UAT 테스트로 생성된 행을 위해 남겨둔다.
+    EXTRA:'Extra Approver'
   };
   const fmtDate = s => s ? new Date(s).toLocaleString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
   try{
