@@ -1322,11 +1322,21 @@ async function token() {
     throw e;
   }
 }
-async function api(path,method='GET',body=null) {
+async function api(path,method='GET',body=null,_retry=0) {
   const t=await token();
   const opts={method,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'}};
   if(body) opts.body=JSON.stringify(body);
   const res=await fetch(GRAPH+path,opts);
+  // SharePoint 스로틀(429)·일시 장애(503/504)는 잠시 뒤 다시 시도한다.
+  // 재시도가 없으면 철회·승인처럼 여러 건을 연속 PATCH하는 작업이 중간에 끊겨
+  // 결재 이력만 일부 바뀐 어중간한 상태로 남는다.
+  if(!res.ok && [429,503,504].includes(res.status) && _retry < 3) {
+    const ra = parseInt(res.headers.get('Retry-After')||'0',10);
+    const wait = ra>0 ? ra*1000 : Math.pow(2,_retry)*800;   // 0.8s → 1.6s → 3.2s
+    console.warn(`[API] ${res.status} 재시도 ${_retry+1}/3 (${wait}ms 후): ${path.slice(0,60)}`);
+    await new Promise(r=>setTimeout(r,wait));
+    return api(path,method,body,_retry+1);
+  }
   if(!res.ok) throw new Error((await res.json()).error?.message||res.status);
   return method==='DELETE'?null:res.json();
 }
@@ -4067,6 +4077,18 @@ async function processApproval(apprId, action, reqId, comment='', aprCode='') {
       loadApprovalQueue();
       return;
     }
+    // 전표 자체가 이미 철회·반려된 경우 방어.
+    // 결재함은 Approvals의 '대기' 행만 보고 목록을 만들기 때문에, 철회 처리가 중간에 끊겨
+    // 전표만 철회되고 결재 행이 '대기'로 남아 있으면 결재자에게 계속 보인다. 그때 승인되면 상태가 꼬인다.
+    try {
+      const reqCur = await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${reqId}?$expand=fields`);
+      const reqSt = (reqCur?.fields?.Status || '').trim();
+      if(reqSt === '철회' || reqSt === '반려') {
+        showAccAlert('처리할 수 없습니다.', `이 전표는 이미 ${reqSt} 상태입니다.`, '⚠️');
+        loadApprovalQueue();
+        return;
+      }
+    } catch(e) { console.warn('[결재] 전표 상태 확인 실패, 진행:', e && e.message); }
     await api(`/sites/${siteId}/lists/${LIST_APPROVALS}/items/${apprId}/fields`, 'PATCH', {
       Status: action==='승인' ? '승인' : '반려',
       Comment: comment,
@@ -4598,18 +4620,31 @@ async function withdrawRequest(spId) {
     const apprData = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(spId)}&$top=50`);
     const items = apprData.value.sort((a,b)=>(a.fields.ApprovalOrder||0)-(b.fields.ApprovalOrder||0));
     const first = items[0];
-    if(first && first.fields.Status !== '대기') {
+    const firstSt = (first?.fields?.Status || '').trim();
+    // 철회 가능 여부는 "결재가 실제로 진행됐는가"로 판단한다.
+    //  · '대기'      → 아직 아무도 처리하지 않음. 정상 철회
+    //  · '철회(잠김)' → 이전 철회가 중간에 끊긴 상태. 남은 단계를 마저 처리해 복구한다.
+    //  · '승인'/'반려' → 이미 결재가 진행됨. 철회 불가
+    // 예전에는 '대기'가 아니면 무조건 막아, 철회가 끊긴 전표를 신청자가 스스로 되돌릴 방법이 없었다.
+    const RESUMABLE = ['대기', '철회(잠김)'];
+    if(first && !RESUMABLE.includes(firstSt)) {
       showAccAlert('철회할 수 없습니다.', '이미 1차 결재가 진행되어 철회가 불가능합니다.', '⚠️');
       loadMyList();
       return;
     }
+    const _resuming = firstSt === '철회(잠김)';
     // Step 1. Approvals 전체 → '철회(잠김)' (결재자 차단 먼저)
+    //         이미 처리된 행은 건너뛴다 — 중단분만 이어서 처리하므로 몇 번을 다시 눌러도 결과가 같다.
+    let _patched = 0;
     for(const it of items) {
+      if((it.fields?.Status||'').trim() === '철회(잠김)') continue;
       await api(`/sites/${siteId}/lists/${LIST_APPROVALS}/items/${it.id}/fields`, 'PATCH', {Status:'철회(잠김)'});
+      _patched++;
     }
     // Step 2. Requests → '철회'
     await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${spId}/fields`, 'PATCH', {Status:'철회'});
-    showAccAlert('전표가 철회되었습니다.', '', '✅');
+    showAccAlert('전표가 철회되었습니다.',
+      _resuming ? `이전에 중단된 철회를 마무리했습니다. (결재 단계 ${_patched}건 정리)` : '', '✅');
     loadMyList();
   } catch(e) {
     console.error('withdrawRequest error:', e);
