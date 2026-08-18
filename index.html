@@ -2219,18 +2219,16 @@ function renderApproval() {
       return `<span class="line-step"><span class="line-step-badge ${cls}" ${isEx?'style="background:#d9a41a"':''}>${i+1}차</span><span style="font-size:.75rem">${label}</span>${i<merged.length-1?'<span class="line-arrow">→</span>':''}</span>`;
     }).join('')+
     `</div>`+
-    `<div style="margin-top:9px;padding-top:8px;border-top:1px dashed #c7e0f4;font-size:11px;line-height:1.65;color:#605e5c">
-      <div style="font-weight:700;color:#0b5fa5;margin-bottom:3px">Adding an approver</div>
-      Approval requirements differ by department. If your department needs an extra approver,
-      click the dashed <span style="color:#0078d4;font-weight:700">＋ 결재자 추가</span> line below to insert one at that exact position.
-      <div style="margin-top:4px">
-        <b>Where</b> — BU approval only (Team Lead → RD). The accounting review steps
-        (Accounting Staff → Accounting Head → CFO) are fixed by policy.<br>
-        <b>How</b> — Select Department → Team → Employee, the same way as the 1st and 2nd approver.<br>
-        <b>Order</b> — Approval runs top to bottom. Later steps shift down by one, and each approver
-        is notified only after the previous step is approved.<br>
-        <b>Scope</b> — Applies to this voucher only. Use ✕ 삭제 to remove it before submitting.
-      </div>
+    `<div style="margin-top:9px;padding-top:8px;border-top:1px dashed #c7e0f4;font-size:11px;line-height:1.55;color:#605e5c">
+      <div style="font-weight:700;color:#0b5fa5;margin-bottom:2px">Adding an Additional Approver</div>
+      <div style="margin-bottom:5px">Approval requirements differ by department. If your department requires approval beyond the standard line above,
+      click the dashed <span style="color:#0078d4;font-weight:700">＋ 결재자 추가</span> line below to insert an additional approver at that exact position.</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;line-height:1.5">
+        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Where</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">BU approval only (Team Lead → RD). Accounting review steps (Accounting Staff → Accounting Head → CFO) are fixed by policy.</td></tr>
+        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">How</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Select Department → Team → Employee, the same way as the 1st and 2nd approver.</td></tr>
+        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Order</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Approval runs top to bottom. Later steps shift down by one, and each approver is notified only after the previous step is approved.</td></tr>
+        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Scope</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:topborder-bottom:none">Applies to this voucher only. Use <span style="color:#a4262c;font-weight:700">✕ 삭제</span> to remove it before submitting.</td></tr>
+      </table>
     </div>`;
 
   const depts=[...new Set((window._employeeData||[]).map(e=>e.dept))].sort();
