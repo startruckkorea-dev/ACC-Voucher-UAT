@@ -159,7 +159,11 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
   padding:3px 12px; font-size:11px; font-weight:700; letter-spacing:.2px;
   transition:all .12s ease;
 }
-.appr-insert:hover{ background:#f0f6ff; }
+.appr-insert.is-full{ cursor:default; }
+.appr-insert.is-full .appr-insert-line{ border-top-color:#e1e1e1; }
+.appr-insert.is-full .appr-insert-btn{ color:#a19f9d; border-color:#dcdcdc; border-style:solid; font-weight:600; }
+.appr-insert.is-full:hover{ background:transparent; }
+.appr-insert:not(.is-full):hover{ background:#f0f6ff; }
 .appr-insert:hover .appr-insert-line{ border-top-color:#0078d4; }
 .appr-insert:hover .appr-insert-btn{ background:#0078d4; color:#fff; border-color:#0078d4; border-style:solid; }
 .appr-insert-plus{ font-size:14px; line-height:1; font-weight:800; }
@@ -906,6 +910,8 @@ const BU_ROLES = ['TL','MC','CEO','RD']; // 추가 삽입이 허용되는 구간
 // RD는 BU 승인의 최종 단계다. 그 뒤는 회계 검토 구간으로 넘어가는 경계라 결재자를 끼워 넣을 수 없다.
 // 단, RD 승인 제외로 RD가 빠지면 그때의 마지막 BU 단계(보통 Department Head) 뒤에는 추가할 수 있어야 한다.
 const NO_INSERT_AFTER = ['RD'];
+// 추가 결재자 상한. 결재 단계가 지나치게 길어지는 것을 막기 위해 전표당 3명까지만 허용한다.
+const MAX_EXTRA = 3;
 const canInsertAfter = role => BU_ROLES.includes(role) && !NO_INSERT_AFTER.includes(role);
 // Approvals.ApproverRole 에 저장되는 값. 이 컬럼은 평문(단일 텍스트)이라 코드가 아닌 표기 문구를 그대로 넣는다.
 // 다른 역할은 TL/MC 같은 짧은 코드지만, 추가 결재자는 알림 메일과 APS 포털에서 별도 매핑 없이 읽혀야 하므로 예외를 둔다.
@@ -2099,6 +2105,7 @@ function mergeApprovalLine(apLine){
   return out;
 }
 function addExtraApprover(anchor){
+  if(extraApprovers.length >= MAX_EXTRA) return;  // 상한 도달 — 삽입선도 비활성 상태
   extraApprovers.push({ uid:'ex'+(++_exSeq), after:anchor, name:'', email:'' });
   renderApproval();
 }
@@ -2144,6 +2151,16 @@ function escHtmlAttr(s){
 }
 // 삽입선 — 클릭하면 해당 위치에 결재자가 추가된다
 function _insertBar(anchor, label){
+  // 상한에 도달하면 선을 없애지 않고 비활성 상태로 남긴다.
+  // 갑자기 사라지면 사용자는 자리가 없어진 줄 알지만, 남겨두면 왜 못 누르는지 바로 알 수 있다.
+  const full = extraApprovers.length >= MAX_EXTRA;
+  if(full){
+    return `<div class="appr-insert is-full" title="추가 결재자는 최대 ${MAX_EXTRA}명까지 지정할 수 있습니다">
+      <span class="appr-insert-line"></span>
+      <span class="appr-insert-btn">Maximum ${MAX_EXTRA} reached</span>
+      <span class="appr-insert-line"></span>
+    </div>`;
+  }
   return `<div class="appr-insert" onclick="addExtraApprover('${anchor}')" title="${escHtmlAttr(label)}">
     <span class="appr-insert-line"></span>
     <span class="appr-insert-btn"><span class="appr-insert-plus">+</span> 결재자 추가</span>
@@ -2236,7 +2253,7 @@ function renderApproval() {
         <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Where</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Within BU approval only — after Team Lead, and up to the step before RD. Accounting review steps are fixed by policy.</td></tr>
         <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">How</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Select Department → Team → Employee, the same way as the 1st and 2nd approver.</td></tr>
         <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Order</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Approval runs top to bottom. Later steps shift down by one, and each approver is notified only after the previous step is approved.</td></tr>
-        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Scope</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:topborder-bottom:none">Applies to this voucher only. Use <span style="color:#a4262c;font-weight:700">✕ 삭제</span> to remove it before submitting.</td></tr>
+        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Scope</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Applies to this voucher only. Use <span style="color:#a4262c;font-weight:700">✕ 삭제</span> to remove it before submitting.</td></tr><tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Limit</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:topborder-bottom:none">Up to <b>${MAX_EXTRA}</b> additional approvers per voucher (<b>${extraApprovers.length} of ${MAX_EXTRA}</b> used). Once the limit is reached, the dashed lines are disabled until you remove one.</td></tr>
       </table>
     </div>`;
 
