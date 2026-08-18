@@ -935,6 +935,8 @@ const canInsertAfter = role => BU_ROLES.includes(role) && !NO_INSERT_AFTER.inclu
 const EXTRA_ROLE = 'Extra Approver';
 // 안내 펼침 상태. renderApproval()이 자주 다시 그리므로 보관해 두지 않으면 매번 접힌다.
 let _apprHelpOpen = false;
+// 관리자 목록에서 "진행이 멈춘" 전표의 SharePoint ID 집합 (전표는 대기인데 대기 결재 행이 없는 건)
+let _stuckReqIds = new Set();
 // 날짜전용 필드(InvoiceDate 등)를 KST 보정 후 YYYY-MM-DD로 표시 — SharePoint가 순수 날짜를 UTC 자정으로 해석해 저장하는 경우
 // 단순 slice(0,10)만 하면 하루 당겨져 보일 수 있어(SSC에서 동일 버그 발견/수정 이력 있음), 항상 이 함수를 통해 표시
 function fmtDateOnly(iso){
@@ -4238,6 +4240,21 @@ async function loadAdminList() {
     adminListRaw = data.value
       .map(item=>({_spId:item.id,...item.fields}))
       .sort((a,b)=>new Date(b.SubmittedDate||0)-new Date(a.SubmittedDate||0));
+    // 진행이 멈춘 전표 식별 — 전표는 '대기'인데 '대기' 결재 행이 하나도 없는 건.
+    // 철회가 중간에 끊기면 생기며, 겉으로는 정상 대기처럼 보여 방치되기 쉽다.
+    try {
+      const pend = new Set();
+      await _forEachAprVolume(async (vol) => {
+        const d = await apiAll(`${GRAPH}/sites/${siteId}/lists/${vol.id}/items?$expand=fields&$filter=fields/Status eq '대기'&$top=999`);
+        d.value.forEach(i => pend.add(String(i.fields.RequestID)));
+        return [];
+      });
+      _stuckReqIds = new Set(
+        adminListRaw.filter(v => (v.Status||'').trim()==='대기' && !pend.has(String(v._spId)))
+                    .map(v => String(v._spId))
+      );
+      if(_stuckReqIds.size) console.warn('[관리자] 진행이 멈춘 전표:', [..._stuckReqIds].join(', '));
+    } catch(e) { _stuckReqIds = new Set(); console.warn('[관리자] 진행 상태 점검 실패:', e && e.message); }
   } catch(e) {
     console.error('loadAdminList error:', e);
     adminListRaw = [];
@@ -4511,6 +4528,10 @@ function renderAdminList(){
     Pending:'badge-대기',Draft:'badge-대기잠김',Approved:'badge-승인완료',Rejected:'badge-반려'};
   const stLabel={'대기':'대기','대기(잠김)':'대기(잠김)','승인완료':'승인완료','반려':'반려','철회':'철회',
     Pending:'대기',Draft:'임시저장',Approved:'승인완료',Rejected:'반려'};
+  // 진행이 멈춘 전표는 상태 옆에 표식을 붙인다. 목록만 봐도 찾을 수 있어야 방치되지 않는다.
+  const stuckMark = v => _stuckReqIds.has(String(v._spId))
+    ? '<span title="결재 대기 단계가 없어 진행이 멈춘 전표입니다. 상세보기에서 정리하세요." style="margin-left:4px;color:#a4262c;font-weight:700;cursor:help">⚠</span>'
+    : '';
   const fmtK=n=>Math.round(n||0).toLocaleString('ko-KR');
   const fmtDate = s => {
     if(!s) return '-';
@@ -4541,7 +4562,7 @@ function renderAdminList(){
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem">${escHtml(spText(v.Purpose))||'-'}</td>
     <td style="text-align:right;font-weight:700;color:#0078d4;font-size:.78rem">${fmtK(v.TotalDR_KRW)}</td>
     <td style="text-align:right;font-weight:700;color:#c0392b;font-size:.78rem">${fmtK(v.TotalCR_KRW)}</td>
-    <td><span class="${stMap[v.Status]||'badge-대기'}">${stLabel[v.Status]||v.Status}</span></td>
+    <td><span class="${stMap[v.Status]||'badge-대기'}">${stLabel[v.Status]||v.Status}</span>${stuckMark(v)}</td>
     <td style="font-size:.78rem;color:#605e5c">${fmtDate(v.SubmittedDate)}</td>
     <td style="font-size:.75rem;color:#323130">
       ${b1DocNo || '<span style="color:#a19f9d">-</span>'}
@@ -5050,7 +5071,30 @@ async function loadApprovalHistory(spId){
         <span class="${cls}">${stText}</span>
       </div>`;
     }).join('');
-    document.getElementById('voucher-appr-history').innerHTML = html;
+    // ── 진행 불가 상태 감지 ──────────────────────────────────────────
+    // 전표는 '대기'인데 결재 행 중 '대기'가 하나도 없으면 아무에게도 뜨지 않아 영원히 멈춘다.
+    // 철회 처리가 중간에 끊겼을 때 생기는 상태이며, 겉으로는 정상 대기처럼 보여 방치되기 쉽다.
+    const _reqSt = (v.Status||'').trim();
+    const _hasPending = list.some(af => (af.Status||'').trim() === '대기');
+    const _hasWithdrawn = list.some(af => (af.Status||'').trim() === '철회(잠김)');
+    let _stuckBox = '';
+    if(_reqSt === '대기' && !_hasPending) {
+      const _me = (user?.email || user?.username || '').trim().toLowerCase();
+      const _isOwner = (v.RequesterEmail||'').trim().toLowerCase() === _me;
+      const _isAdmin = ADMIN_EMAILS.map(e=>e.toLowerCase()).includes(_me);
+      const _btn = (_isOwner || _isAdmin)
+        ? `<button onclick="confirmWithdraw('${v._spId}')" style="margin-top:7px;background:#a4262c;color:#fff;border:none;border-radius:4px;padding:5px 14px;font-size:.75rem;cursor:pointer;font-family:inherit">철회 마무리</button>`
+        : '<div style="margin-top:5px">신청자 또는 ACC 관리자에게 처리를 요청해 주세요.</div>';
+      _stuckBox = `<div style="margin-top:8px;background:#fdf6e3;border:1px solid #f0d9a0;border-radius:6px;padding:9px 12px;font-size:.75rem;line-height:1.6;color:#8a6116">
+        <b>⚠️ 진행이 멈춘 전표입니다</b><br>
+        ${_hasWithdrawn
+          ? '철회 처리가 중간에 중단되어, 전표는 대기 상태인데 다음 결재자가 지정되지 않았습니다.'
+          : '결재 대기 중인 단계가 없어 더 이상 진행되지 않습니다.'}
+        결재함에도 표시되지 않으므로 아래에서 정리해 주세요.
+        ${_btn}
+      </div>`;
+    }
+    document.getElementById('voucher-appr-history').innerHTML = html + _stuckBox;
 
     // 내 결재 대기 건이면 GW와 동일하게 결재 이력 아래에 승인/반려 버튼 표시
     const myPending = list.find(af=>isMe(af.ApproverEmail) && af.Status==='대기');
