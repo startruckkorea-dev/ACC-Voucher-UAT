@@ -165,8 +165,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 .appr-insert-plus{ font-size:14px; line-height:1; font-weight:800; }
 .appr-block.appr-extra{ background:#fffdf5; border-color:#e8cf8f; border-left:3px solid #d9a41a; }
 .btn-exdel{
-  float:right; background:#fff; color:#a4262c; border:1px solid #e6b3b3; border-radius:4px;
-  padding:1px 8px; font-size:10px; font-weight:600; cursor:pointer;
+  float:right; background:#fff; color:#a4262c; border:1px solid #e6b3b3; border-radius:5px;
+  padding:3px 16px; font-size:10px; font-weight:600; cursor:pointer; line-height:1.4;
 }
 .btn-exdel:hover{ background:#a4262c; color:#fff; border-color:#a4262c; }
 .line-arrow { color:#a19f9d; font-size:13px; }
@@ -897,7 +897,8 @@ let extraBPs = []; // "+BP 추가"로 넣은 추가 BP 목록 [{code,name,bizNo,
 let accOverride = null; // Accounting 담당자를 수동으로 변경했을 때 {name,email} — null이면 AP/AR/GL 기본값 그대로 사용
 // ── 추가 결재자 (UAT 전용) ──────────────────────────────────────────
 // 부서마다 추가 결재 조건이 달라, 자동 구성된 BU 승인 구간에 결재자를 끼워 넣을 수 있게 한다.
-// after: 앞에 오는 BU 단계의 role ('START'는 1차보다 앞). 배열 순서가 같은 위치 안에서의 순서가 된다.
+// after: 앞에 오는 BU 단계의 role. 1차(Team Lead) 앞에는 넣을 수 없고, 반드시 어떤 단계 뒤에만 붙는다.
+//        배열 순서가 같은 위치 안에서의 순서가 된다.
 // 값은 DOM이 아니라 이 배열에 보관한다 — 재렌더링해도 입력한 내용이 유지되도록.
 let extraApprovers = [];
 let _exSeq = 0;
@@ -2068,21 +2069,21 @@ function evaluateBpCategoryWarning() {
 // 자동 구성된 라인(apLine)과 사용자가 끼워 넣은 결재자를 하나의 순서로 합친다.
 // renderApproval()과 buildApprovers()가 같은 함수를 쓰기 때문에 화면과 실제 상신 결과가 어긋나지 않는다.
 function _buLast(apLine){
-  let last='START';
+  let last=null;   // BU 단계가 하나도 없으면 추가 결재자를 놓을 자리가 없다
   apLine.forEach(a=>{ if(BU_ROLES.includes(a.role)) last=a.role; });
   return last;
 }
 function mergeApprovalLine(apLine){
+  // 추가 결재자는 반드시 어떤 BU 단계 "뒤"에만 들어간다. 1차(Team Lead) 앞에는 넣을 수 없다.
   // 앵커로 잡아둔 BU 단계가 사라진 경우(예: RD 제외 선택) 그 위치의 추가 결재자는
   // 남아 있는 마지막 BU 단계 뒤로 옮겨 붙인다. 입력해 둔 내용이 조용히 사라지지 않도록.
   const present = new Set(apLine.filter(a=>BU_ROLES.includes(a.role)).map(a=>a.role));
   const fallback = _buLast(apLine);
   const at = anchor => extraApprovers.filter(x=>{
-    const a = (x.after==='START' || present.has(x.after)) ? x.after : fallback;
+    const a = present.has(x.after) ? x.after : fallback;
     return a === anchor;
   });
   const out=[];
-  at('START').forEach(x=>out.push({kind:'extra', ex:x}));
   apLine.forEach((a,bi)=>{
     out.push({kind:'base', a, baseIdx:bi+1});
     if(BU_ROLES.includes(a.role)) at(a.role).forEach(x=>out.push({kind:'extra', ex:x}));
@@ -2224,7 +2225,7 @@ function renderApproval() {
       <div style="margin-bottom:5px">Approval requirements differ by department. If your department requires approval beyond the standard line above,
       click the dashed <span style="color:#0078d4;font-weight:700">＋ 결재자 추가</span> line below to insert an additional approver at that exact position.</div>
       <table style="width:100%;border-collapse:collapse;font-size:11px;line-height:1.5">
-        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Where</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">BU approval only (Team Lead → RD). Accounting review steps (Accounting Staff → Accounting Head → CFO) are fixed by policy.</td></tr>
+        <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Where</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Within BU approval only, after the Team Lead step. Accounting review steps are fixed by policy.</td></tr>
         <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">How</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Select Department → Team → Employee, the same way as the 1st and 2nd approver.</td></tr>
         <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Order</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:top">Approval runs top to bottom. Later steps shift down by one, and each approver is notified only after the previous step is approved.</td></tr>
         <tr><td style="padding:4px 10px 4px 0;border-bottom:1px solid #dbe7f3;vertical-align:top;white-space:nowrap;font-weight:700;color:#0b5fa5">Scope</td><td style="padding:4px 8px;border-bottom:1px solid #dbe7f3;vertical-align:topborder-bottom:none">Applies to this voucher only. Use <span style="color:#a4262c;font-weight:700">✕ 삭제</span> to remove it before submitting.</td></tr>
@@ -2316,12 +2317,10 @@ function renderApproval() {
   const _present = new Set(apLine.filter(a=>BU_ROLES.includes(a.role)).map(a=>a.role));
   const _fallback = _buLast(apLine);
   const _at = anchor => extraApprovers.filter(x=>{
-    const t = (x.after==='START' || _present.has(x.after)) ? x.after : _fallback;
+    const t = _present.has(x.after) ? x.after : _fallback;
     return t === anchor;
   });
   let html=''; let disp=0;
-  _at('START').forEach(x=>{ disp++; html += renderExtra(x,disp); });
-  html += _insertBar('START','맨 앞에 결재자 추가');
   apLine.forEach((a,bi)=>{
     disp++;
     html += renderBase(a, bi+1, disp);
