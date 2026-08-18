@@ -2219,17 +2219,9 @@ function renderApproval() {
       return `<span class="line-step"><span class="line-step-badge ${cls}" ${isEx?'style="background:#d9a41a"':''}>${i+1}차</span><span style="font-size:.75rem">${label}</span>${i<merged.length-1?'<span class="line-arrow">→</span>':''}</span>`;
     }).join('')+
     `</div>`+
-    `<div style="margin-top:10px;padding-top:9px;border-top:1px dashed #c7e0f4;font-size:11px;line-height:1.7;color:#3a3a3a">
-      <div style="font-weight:700;color:#0b5fa5;margin-bottom:4px">➕ 결재 라인 추가 안내</div>
-      위 라인은 Voucher Type과 DR 합계 금액을 기준으로 자동 구성됩니다.
-      다만 <b>부서별로 추가 결재가 필요한 경우가 있어</b>, 아래 결재자 목록의 점선을 눌러 원하는 위치에 결재자를 끼워 넣을 수 있습니다.
-      <div style="margin-top:6px">
-        <b>· 추가 방법</b> — 결재자 사이의 <span style="color:#0078d4;font-weight:700">＋ 결재자 추가</span> 점선을 클릭하면 그 자리에 결재자 칸이 생깁니다. 지정 방식은 1·2차와 동일하게 부서 → 팀 → 직원 순으로 선택합니다.<br>
-        <b>· 추가 가능 구간</b> — Team Lead부터 RD까지의 <b>BU 승인 구간</b>에만 넣을 수 있습니다. Accounting 담당자·Accounting Head·CFO로 이어지는 <b>회계 검토 구간은 회계 규정상 고정</b>이라 변경할 수 없습니다.<br>
-        <b>· 순서</b> — 추가한 결재자는 삽입한 위치의 차수를 갖고, 뒤따르는 결재자의 차수는 자동으로 한 칸씩 밀립니다. 결재는 위에서 아래로 순차 진행되며, 앞 단계가 승인되어야 다음 결재자에게 전달됩니다.<br>
-        <b>· 삭제</b> — 추가한 칸 우측의 <span style="color:#a4262c;font-weight:700">✕ 삭제</span>를 누르면 제거됩니다. 상신 전까지 자유롭게 변경할 수 있습니다.<br>
-        <b>· 주의</b> — 추가 결재자는 이 전표 한 건에만 적용됩니다. 매번 같은 결재자가 필요하다면 부서 표준 결재라인으로 등록하는 편이 낫습니다. IT팀에 문의해 주세요.
-      </div>
+    `<div style="margin-top:9px;padding-top:8px;border-top:1px dashed #c7e0f4;font-size:11px;line-height:1.6;color:#605e5c">
+      부서별로 결재가 더 필요하면 아래 <span style="color:#0078d4;font-weight:700">＋ 결재자 추가</span> 점선을 눌러 그 자리에 결재자를 넣을 수 있습니다.
+      <b>BU 승인 구간(Team Lead~RD)</b>에만 추가할 수 있고, 회계 검토 구간은 고정입니다. 이 전표에만 적용됩니다.
     </div>`;
 
   const depts=[...new Set((window._employeeData||[]).map(e=>e.dept))].sort();
