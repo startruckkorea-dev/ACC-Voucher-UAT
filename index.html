@@ -5770,7 +5770,9 @@ function buildOfficialVoucherHTML(v, lines_data, apprList) {
           const role=rc[0];
           const rules = APPROVAL_RULES[v.VoucherType]||{};
           let ruleText;
-          if(role==='ACC'||role==='AMGR') ruleText='Required'; // 항상 결재라인에 포함 (needed() 체크 없이 무조건 push)
+          // 추가 결재자는 금액 기준이 아니라 신청자가 직접 지정한 단계다.
+          if(rc[2]) ruleText='Added by requester';
+          else if(role==='ACC'||role==='AMGR') ruleText='Required'; // 항상 결재라인에 포함 (needed() 체크 없이 무조건 push)
           else {
             const rv = rules[role];
             // RD가 사유를 들어 제외된 건은 조건 자체가 적용되지 않았음을 명시
