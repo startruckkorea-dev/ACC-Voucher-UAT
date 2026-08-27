@@ -267,6 +267,16 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 .btn-draft{background:#fff;color:#475569;border:1px solid #94a3b8;border-radius:6px;padding:9px 20px;
   font-size:.86rem;font-weight:700;cursor:pointer;font-family:inherit}
 .btn-draft:hover{background:#f1f5f9}
+/* Draft 전용 보기 토글 — 평소 목록에서는 임시저장을 감추고, 이 버튼으로만 꺼내 본다.
+   결재로 올라가지 않은 작성 중 전표가 일반 목록에 섞이지 않게 하려는 것. */
+.draft-toggle{display:inline-flex;align-items:center;gap:5px;background:#fff;color:#107c10;
+  border:1px solid #a7d7a7;border-radius:6px;padding:5px 12px;font-size:.74rem;font-weight:700;
+  cursor:pointer;font-family:inherit;white-space:nowrap}
+.draft-toggle:hover{background:#f2faf2}
+.draft-toggle.on{background:#107c10;color:#fff;border-color:#107c10}
+.draft-toggle .dt-dot{width:7px;height:7px;border-radius:50%;background:#107c10;flex-shrink:0}
+.draft-toggle.on .dt-dot{background:#fff}
+.draft-toggle .dt-n{font-size:.7rem;opacity:.85}
 .badge-철회{background:#f1f5f9;color:#64748b;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .list-empty { text-align: center; padding: 48px; color: #a19f9d; font-size: 14px; }
 
@@ -470,7 +480,10 @@ if (new URLSearchParams(location.search).get('openId')) {
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div class="card-title" style="margin-bottom:0">전표 목록</div>
-        
+        <button id="my-draft-toggle" class="draft-toggle" onclick="toggleDraftView('my')"
+          title="임시저장(Draft) 전표만 따로 봅니다. 평소 목록에서는 보이지 않습니다.">
+          <span class="dt-dot"></span>Draft<span class="dt-n" id="my-draft-count"></span>
+        </button>
       </div>
       <div class="list-filters">
         <select id="f-type" onchange="renderList()">
@@ -486,7 +499,6 @@ if (new URLSearchParams(location.search).get('openId')) {
         </select>
         <select id="f-status" onchange="renderList()">
           <option value="">전체 상태</option>
-          <option value="임시저장">임시저장</option>
           <option value="대기">대기</option>
           <option value="대기(잠김)">대기(잠김)</option>
           <option value="승인완료">승인완료</option>
@@ -812,7 +824,6 @@ if (new URLSearchParams(location.search).get('openId')) {
   <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
     <select id="admin-status" onchange="applyAdminFilters()" style="border:1px solid #d2d0ce;border-radius:4px;padding:6px 10px;font-size:.72rem;font-family:inherit">
       <option value="">전체 상태</option>
-      <option value="임시저장">임시저장</option>
       <option value="대기">대기</option>
       <option value="승인완료">승인완료</option>
       <option value="반려">반려</option>
@@ -830,6 +841,10 @@ if (new URLSearchParams(location.search).get('openId')) {
       <option value="SET">Settlement</option>
     </select>
     <input type="text" id="admin-search" oninput="applyAdminFilters()" placeholder="신청자/Title/BP명" style="border:1px solid #d2d0ce;border-radius:4px;padding:6px 10px;font-size:.72rem;font-family:inherit;min-width:200px">
+    <button id="admin-draft-toggle" class="draft-toggle" onclick="toggleDraftView('admin')"
+      title="직원들이 저장한 임시저장(Draft) 전표만 봅니다. 결재로 올라가기 전에 여기서 확인합니다.">
+      <span class="dt-dot"></span>Draft<span class="dt-n" id="admin-draft-count"></span>
+    </button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
       <span style="font-size:.82rem;color:#605e5c;font-weight:500" id="admin-count"></span>
       <button onclick="exportAdminExcel()" style="padding:6px 14px;background:#107c10;color:#fff;border:none;border-radius:4px;font-size:.82rem;cursor:pointer;white-space:nowrap">📊 Excel 내보내기</button>
@@ -5022,11 +5037,14 @@ async function loadAdminList() {
 }
 
 function applyAdminFilters() {
+  refreshDraftCount('admin');
   _adminPgState.page = 0;
   const fs = (document.getElementById('admin-status')||{value:''}).value;
   const ft = (document.getElementById('admin-type')||{value:''}).value;
   const fk = ((document.getElementById('admin-search')||{value:''}).value||'').toLowerCase();
   adminListCache = adminListRaw.filter(v=>{
+    const _isDraftRow = (v.Status||'').trim() === DRAFT_STATUS;
+    if(_draftView.admin ? !_isDraftRow : _isDraftRow) return false;
     if(fs && v.Status!==fs) return false;
     if(ft && v.VoucherType!==ft) return false;
     if(fk && !(v.RequesterEmail||'').toLowerCase().includes(fk) && !(v.Title||'').toLowerCase().includes(fk) && !(v.BPName||'').toLowerCase().includes(fk)) return false;
@@ -5457,10 +5475,15 @@ function renderAdminList(){
 }
 
 function renderList(){
+  refreshDraftCount('my');
   const ft=document.getElementById('f-type')?.value||'';
   const fs=document.getElementById('f-status')?.value||'';
   const fk=(document.getElementById('f-kw')?.value||'').toLowerCase();
   const list=voucherListCache.filter(v=>{
+    // Draft 보기가 켜져 있으면 임시저장만, 꺼져 있으면 임시저장을 감춘다.
+    // 결재로 올라가지 않은 작성 중 전표가 일반 목록에 섞이지 않게 한다.
+    const _isDraftRow = (v.Status||'').trim() === DRAFT_STATUS;
+    if(_draftView.my ? !_isDraftRow : _isDraftRow) return false;
     if(ft&&v.VoucherType!==ft)return false;
     if(fs&&v.Status!==fs)return false;
     if(fk&&!v.Purpose?.toLowerCase().includes(fk)&&!v.PurposeTitle?.toLowerCase().includes(fk)&&!v.BPName?.toLowerCase().includes(fk)&&!v.Title?.toLowerCase().includes(fk))return false;
@@ -5472,7 +5495,7 @@ function renderList(){
     Pending:'대기',Draft:'임시저장',Approved:'승인완료',Rejected:'반려'};
   const body=document.getElementById('list-body');
   if(!list.length){
-    body.innerHTML=`<tr><td colspan="12" class="list-empty">${voucherListCache.length?'검색 결과가 없습니다.':'작성된 바우처가 없습니다.'}</td></tr>`;
+    body.innerHTML=`<tr><td colspan="12" class="list-empty">${_draftView.my?'임시저장한 전표가 없습니다.':voucherListCache.length?'검색 결과가 없습니다.':'작성된 바우처가 없습니다.'}</td></tr>`;
     return;
   }
   const fmtK=n=>Math.round(n||0).toLocaleString('ko-KR');
@@ -5496,6 +5519,26 @@ function renderList(){
     <td style="font-size:.78rem;color:#605e5c">${fmtDate(v.SubmittedDate)}</td>
     <td onclick="event.stopPropagation()" style="text-align:center">${v.Status===DRAFT_STATUS?`<button onclick="resumeDraft('${v._spId}')" style="background:#0078d4;color:#fff;border:none;border-radius:4px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer;margin-right:4px">이어서 작성</button><button onclick="confirmDeleteDraft('${v._spId}')" style="background:#fff;color:#a4262c;border:1px solid #e6b3b7;border-radius:4px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer">삭제</button>`:v.Status==='대기'?`<button onclick="confirmWithdraw('${v._spId}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 12px;font-size:.75rem;cursor:pointer;font-family:inherit;white-space:nowrap">Withdraw</button>`:''}</td>
   </tr>`).join('');
+}
+
+// ── Draft 보기 토글 ────────────────────────────────────────────────────
+// 임시저장 전표는 평소 목록에서 감추고 이 토글로만 꺼내 본다.
+// 직원은 자기 것을, 관리자는 전 직원 것을 결재 전에 확인하는 용도.
+const _draftView = { my: false, admin: false };
+
+function toggleDraftView(scope) {
+  _draftView[scope] = !_draftView[scope];
+  const btn = document.getElementById(scope === 'my' ? 'my-draft-toggle' : 'admin-draft-toggle');
+  if (btn) btn.classList.toggle('on', _draftView[scope]);
+  if (scope === 'my') renderList(); else applyAdminFilters();
+}
+
+// 토글 옆에 임시저장 건수를 띄운다. 0 이면 숫자를 감춘다.
+function refreshDraftCount(scope) {
+  const src = scope === 'my' ? (voucherListCache || []) : (adminListRaw || []);
+  const n = src.filter(v => (v.Status||'').trim() === DRAFT_STATUS).length;
+  const el = document.getElementById(scope === 'my' ? 'my-draft-count' : 'admin-draft-count');
+  if (el) el.textContent = n ? ' ' + n : '';
 }
 
 // ── 임시저장(Draft) 이어서 작성 · 삭제 ──────────────────────────────────
