@@ -3794,6 +3794,10 @@ function showAccAlert(title, sub='', icon='✅', list='') {
   document.getElementById('acc-alert-sub').textContent = sub;
   const le = document.getElementById('acc-alert-list');
   if(le){ le.textContent = list || ''; le.style.display = list ? 'block' : 'none'; }
+  // 안내 목록이 붙는 알림은 줄이 길어 380px 에서는 한 줄이 두세 번 접힌다.
+  // 목록이 있을 때만 폭을 넓혀, 일반 알림은 지금처럼 작게 둔다.
+  const bx = document.getElementById('acc-alert-box');
+  if(bx) bx.style.maxWidth = list ? '620px' : '380px';
   document.getElementById('acc-alert-modal').style.display = 'flex';
 }
 function closeAccAlert() {
@@ -7996,11 +8000,11 @@ function ptApply(){
 </script>
 <!-- GW 스타일 알림 모달 -->
 <div id="acc-alert-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:380px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.18);text-align:center">
+  <div id="acc-alert-box" style="background:#fff;border-radius:12px;padding:28px 32px;max-width:380px;width:90%;max-height:88vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18);text-align:center">
     <div id="acc-alert-icon" style="font-size:2rem;margin-bottom:10px">✅</div>
     <div id="acc-alert-title" style="font-size:1rem;font-weight:700;color:#1e293b;margin-bottom:6px;line-height:1.6"></div>
     <div id="acc-alert-sub" style="font-size:.8rem;color:#64748b;margin-bottom:20px;white-space:pre-line;line-height:1.7;text-align:center"></div>
-    <div id="acc-alert-list" style="display:none;font-size:.78rem;color:#475569;line-height:1.7;text-align:left;background:#f8fafc;border:1px solid #e6ebf1;border-radius:8px;padding:11px 14px;margin:-8px 0 18px;white-space:pre-line"></div>
+    <div id="acc-alert-list" style="display:none;font-size:.79rem;color:#475569;line-height:1.85;text-align:left;background:#f8fafc;border:1px solid #e6ebf1;border-radius:8px;padding:14px 18px;margin:-8px 0 18px;white-space:pre-line"></div>
     <button style="background:#0078d4;color:#fff;border:none;border-radius:8px;padding:9px 32px;font-size:.88rem;font-weight:600;cursor:pointer;font-family:inherit" onclick="closeAccAlert()">확인</button>
   </div>
 </div>
