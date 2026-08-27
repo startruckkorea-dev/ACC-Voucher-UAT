@@ -4318,10 +4318,19 @@ async function saveVoucher(status) {
     } else {
       showAccAlert('저장되었습니다.', 'Voucher ID: '+voucherId, '✅');
     }
-    // 이어서 작성한 임시저장 원본은 저장이 끝난 뒤 정리한다 (같은 내용이 두 건 남지 않도록)
+    // 이어서 작성한 임시저장 원본을 정리한다 (같은 내용이 두 건 남지 않도록).
+    // 지우지 못하면 같은 내용이 두 곳에 남는데, 조용히 넘어가면 사용자는 알 수 없다.
+    // 상신은 이미 끝났으므로 되돌리지 않고, 남은 임시저장을 직접 지우도록 알린다.
     if (_resumingDraftId && String(_resumingDraftId) !== String(requestId)) {
-      try { await api(`/sites/${siteId}/lists/${LIST_DRAFTS}/items/${_resumingDraftId}`, 'DELETE'); }
-      catch(de) { console.warn('[Draft] 원본 정리 실패(무시됨):', de.message); }
+      try {
+        await api(`/sites/${siteId}/lists/${LIST_DRAFTS}/items/${_resumingDraftId}`, 'DELETE');
+      } catch(de) {
+        console.warn('[Draft] 원본 정리 실패:', de.message);
+        showAccAlert('임시저장이 남아 있습니다',
+          '상신은 정상 처리되었습니다.\n\n'
+          + '이어서 작성한 임시저장 건을 지우지 못했습니다.\n'
+          + '[내 전표 목록] → Draft 에서 직접 삭제해 주세요.', '⚠️');
+      }
     }
     _resumingDraftId = null;
     _resumingAttRef = '';
