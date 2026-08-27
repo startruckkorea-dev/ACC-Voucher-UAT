@@ -1122,6 +1122,11 @@ const TENANT_ID = '19cab1f5-21f4-44df-8ac6-96d6ca595203';
 // 값이 한글인 이유: 나머지 상태(대기·승인완료·반려·철회)가 모두 한글이라
 // 정렬·필터·배지 클래스(badge-{상태})가 같은 규칙으로 동작하게 맞춘 것.
 const DRAFT_STATUS = '임시저장';
+// 임시저장은 운영 Requests 와 분리된 전용 리스트에 담는다.
+// 같은 리스트를 쓰면 Draft 를 만들 때마다 운영 전표 번호를 하나씩 소모해
+// ID 에 구멍이 생긴다(SharePoint 는 삭제한 번호를 재사용하지 않는다).
+// 분리하면 운영 번호가 연속으로 유지되고, SSC·APS 에서도 아예 보이지 않는다.
+const LIST_DRAFTS = 'de6d180d-7651-4c75-8b64-73df6013e932'; // ACC-Voucher_Drafts
 
 const DEFAULT_LIST_REQUESTS  = '060b5c19-b1ed-40a3-9dbd-fae9a6648a57'; // VOL01 고정값 — 볼륨 설정 파일이 아직 없을 때의 최초 부트스트랩 기준
 const DEFAULT_LIST_APPROVALS = 'bf0412d9-6556-46d9-a165-149461a4f286';
@@ -1673,7 +1678,7 @@ function _uatBlockedWrite(path, method) {
 // 탭을 닫으면 sessionStorage 와 함께 사라진다 (서버에는 아무것도 남지 않는다).
 // v2: 버킷 기준을 목록 id 에서 역할(REQ/APR)로 바꿨다.
 // 키를 올려 옛 구조로 저장된 세션 데이터를 그대로 두고 새로 시작한다.
-const UAT_STORE_KEY = 'uatSandbox.v2';
+const UAT_STORE_KEY = 'uatSandbox.v3';  // v3: Draft 전용 버킷 · 버킷별 채번
 // 새로고침해도 작업 내용이 남도록 sessionStorage 에 함께 둔다. 탭을 닫으면 사라진다.
 let _uatDB = { seq: 90000, items: {} };   // items[listId][itemId] = { id, fields }
 
@@ -1702,6 +1707,8 @@ if (IS_UAT) _uatLoadDB();
 // 저장은 옛 id 버킷에 들어가고 조회는 새 id 버킷을 보게 되어 방금 만든 전표가 사라진다.
 // 샌드박스는 어차피 브라우저 안에서만 쓰므로 역할 두 칸이면 충분하다.
 function _uatRoleOf(listId) {
+  // 임시저장은 전용 리스트라 결재행과 섞이면 안 된다. 별도 칸으로 둔다.
+  if (listId === LIST_DRAFTS) return 'DRAFT';
   const reqIds = [LIST_REQUESTS, DEFAULT_LIST_REQUESTS,
     (typeof VOL_CONFIG !== 'undefined' && VOL_CONFIG && VOL_CONFIG.reqList) || ''];
   return reqIds.includes(listId) ? 'REQ' : 'APR';
@@ -1762,7 +1769,11 @@ function uatHandle(path, method, body) {
   if (p.includes('/columns')) return method === 'GET' ? { value: [] } : { id: 'uat-col' };
 
   if (method === 'POST') {
-    const id = String(++_uatDB.seq);
+    // 채번도 버킷별로 따로 센다. 운영에서 리스트마다 번호가 독립인 것과 같게 맞춘다.
+    const _role = _uatRoleOf(listId);
+    if (!_uatDB.seqBy) _uatDB.seqBy = {};
+    if (!_uatDB.seqBy[_role]) _uatDB.seqBy[_role] = _role === 'DRAFT' ? 0 : 90000;
+    const id = String(++_uatDB.seqBy[_role]);
     const rec = { id, fields: Object.assign({ id }, (body && body.fields) || {}) };
     bucket[id] = rec; _uatSaveDB();
     console.warn('[UAT] 샌드박스 생성 —', listId.slice(0, 8), id);
@@ -4068,14 +4079,16 @@ async function saveVoucher(status) {
     };
     if(status==='대기') spStart();
     if(status==='대기') spStep('req','run');
-    const reqRes = await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items`, 'POST', reqBody);
+    // Draft 는 전용 리스트에, 상신은 운영 Requests 에 만든다.
+    const _targetList = _isDraft ? LIST_DRAFTS : LIST_REQUESTS;
+    const reqRes = await api(`/sites/${siteId}/lists/${_targetList}/items`, 'POST', reqBody);
     const requestId = reqRes.id;
     if(status==='대기') spStep('req','ok');
 
     // Title을 GW 방식(ACC-Voucher-YYYY-MM-DD_ID-{itemId})으로 재설정
     if(status==='대기') spStep('id','run');
     voucherId = 'ACC-Voucher-'+dateStr+'_ID-'+requestId;
-    await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${requestId}/fields`, 'PATCH', {Title: voucherId});
+    await api(`/sites/${siteId}/lists/${_targetList}/items/${requestId}/fields`, 'PATCH', {Title: voucherId});
     if(status==='대기'){ spStep('id','ok'); spVid('Voucher ID: '+voucherId); }
 
     // Accounting 결재라인 지정(회계 담당자 단계 제외) 기록 — RD 제외와 동일하게 감사 근거로 남긴다.
@@ -4265,7 +4278,7 @@ async function saveVoucher(status) {
     }
     // 이어서 작성한 임시저장 원본은 저장이 끝난 뒤 정리한다 (같은 내용이 두 건 남지 않도록)
     if (_resumingDraftId && String(_resumingDraftId) !== String(requestId)) {
-      try { await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${_resumingDraftId}`, 'DELETE'); }
+      try { await api(`/sites/${siteId}/lists/${LIST_DRAFTS}/items/${_resumingDraftId}`, 'DELETE'); }
       catch(de) { console.warn('[Draft] 원본 정리 실패(무시됨):', de.message); }
     }
     _resumingDraftId = null;
@@ -4756,13 +4769,20 @@ async function loadMyList() {
   if(!siteId){const s=await api('/sites/'+SITE_PATH_DB);siteId=s.id;}
   await loadVolumeConfig(); applyCurrentVolume();
   const email = user?.username||'';
-  const url = `${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields`+
+  // 운영 전표(Requests)와 임시저장(Drafts)을 함께 읽는다.
+  // 두 리스트는 번호 체계가 달라 _spId 만으로는 구분되지 않으므로 _srcDraft 로 표시해 둔다.
+  const _mk = (list, isDraft) =>
+    `${GRAPH}/sites/${siteId}/lists/${list}/items?$expand=fields` +
     `&$filter=fields/RequesterEmail eq '${email}'&$top=500`;
   try {
-    const data = await apiAll(url);
-    voucherListCache = data.value
-      .map(item=>({_spId:item.id,...item.fields}))
-      .sort((a,b)=>new Date(b.SubmittedDate||0)-new Date(a.SubmittedDate||0));
+    const [reqData, draftData] = await Promise.all([
+      apiAll(_mk(LIST_REQUESTS)),
+      apiAll(_mk(LIST_DRAFTS)).catch(e => { console.warn('[Draft] 임시저장 조회 실패:', e.message); return {value:[]}; }),
+    ]);
+    voucherListCache = [
+      ...reqData.value.map(item=>({_spId:item.id, _srcDraft:false, ...item.fields})),
+      ...draftData.value.map(item=>({_spId:item.id, _srcDraft:true, ...item.fields})),
+    ].sort((a,b)=>new Date(b.SubmittedDate||b.Created||0)-new Date(a.SubmittedDate||a.Created||0));
   } catch(e) {
     console.error('loadMyList error:', e);
     voucherListCache = [];
@@ -5098,10 +5118,16 @@ async function loadAdminList() {
   await loadVolumeConfig(); applyCurrentVolume();
   refreshVolStatusBar();
   try {
-    const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`);
-    adminListRaw = data.value
-      .map(item=>({_spId:item.id,...item.fields}))
-      .sort((a,b)=>new Date(b.SubmittedDate||0)-new Date(a.SubmittedDate||0));
+    // 운영 전표와 임시저장을 함께 읽는다. 임시저장 조회가 실패해도 운영 목록은 보이게 한다.
+    const [data, draftData] = await Promise.all([
+      apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`),
+      apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_DRAFTS}/items?$expand=fields&$top=999`)
+        .catch(e => { console.warn('[Draft] 임시저장 조회 실패:', e.message); return {value:[]}; }),
+    ]);
+    adminListRaw = [
+      ...data.value.map(item=>({_spId:item.id, _srcDraft:false, ...item.fields})),
+      ...draftData.value.map(item=>({_spId:item.id, _srcDraft:true, ...item.fields})),
+    ].sort((a,b)=>new Date(b.SubmittedDate||b.Created||0)-new Date(a.SubmittedDate||a.Created||0));
     // 진행이 멈춘 전표 식별 — 전표는 '대기'인데 '대기' 결재 행이 하나도 없는 건.
     // 철회가 중간에 끊기면 생기며, 겉으로는 정상 대기처럼 보여 방치되기 쉽다.
     // 표식은 IT 담당자(config: ACC-Voucher_IT)에게만 보이므로, 대상이 아니면 조회 자체를 생략한다.
@@ -5656,7 +5682,7 @@ let _resumingDraftId = null;
 async function resumeDraft(spId) {
   try {
     applyCurrentVolume();
-    const f = await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${spId}/fields`);
+    const f = await api(`/sites/${siteId}/lists/${LIST_DRAFTS}/items/${spId}/fields`);
     if ((f.Status || '').trim() !== DRAFT_STATUS) {
       showAccAlert('이어서 작성할 수 없습니다', '임시저장 상태의 전표만 불러올 수 있습니다.', '⚠️');
       return;
@@ -5669,6 +5695,14 @@ async function resumeDraft(spId) {
     set('v-bp-code', f.BPCode); set('v-bp-name', f.BPName);
     set('v-bp-bizno', f.BPBizNo); set('v-bp-cat', f.BPCategory);
     set('v-purpose-title', f.PurposeTitle); set('v-purpose', spText(f.Purpose || ''));
+    set('v-cctr', f.RequesterCCTR);
+    // 추가 BP 는 저장은 되는데 복원이 빠져 있었다. 없으면 BP 를 여러 개 넣은 전표가
+    // 이어서 작성할 때 첫 BP 만 남는다.
+    try {
+      const _bps = JSON.parse(spText(f.AdditionalBPsJSON || '') || '[]');
+      extraBPs = Array.isArray(_bps) ? _bps : [];
+    } catch(e) { extraBPs = []; console.warn('[Draft] 추가 BP 복원 실패:', e.message); }
+    if (typeof renderExtraBPs === 'function') { try { renderExtraBPs(); } catch(e){} }
     // ExchangeRate 는 'EUR:1234; USD:1300; ...' 한 필드에 묶여 저장된다.
     const _rateMap = {};
     String(spText(f.ExchangeRate || '')).split(/[;,\n]/).forEach(seg => {
@@ -5706,12 +5740,12 @@ function confirmDeleteDraft(spId) {
 async function deleteDraft(spId) {
   try {
     applyCurrentVolume();
-    const f = await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${spId}/fields`);
+    const f = await api(`/sites/${siteId}/lists/${LIST_DRAFTS}/items/${spId}/fields`);
     if ((f.Status || '').trim() !== DRAFT_STATUS) {
       showAccAlert('삭제할 수 없습니다', '임시저장 상태의 전표만 삭제할 수 있습니다.', '⚠️');
       return;
     }
-    await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${spId}`, 'DELETE');
+    await api(`/sites/${siteId}/lists/${LIST_DRAFTS}/items/${spId}`, 'DELETE');
     if (_resumingDraftId === String(spId)) _resumingDraftId = null;
     showAccAlert('삭제되었습니다.', '임시저장 전표를 목록에서 지웠습니다.', '🗑️');
     await loadMyList();
