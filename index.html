@@ -1102,6 +1102,13 @@ let voucherStore = JSON.parse(localStorage.getItem('stk_acc_vouchers') || '[]');
 // acc_voucher_volumes.json (STK-DB 문서 라이브러리)에 저장. 파일이 없으면 최초 실행 시 지금 쓰는 리스트를 APR01로 자동 등록 (기존 동작 변화 없음).
 let VOL_CONFIG = null; // { reqList, currentApr, aprVolumes: [{code, id, label, startDate}] }
 let _volConfigTag = '';   // acc_voucher_volumes.json 의 eTag. 파일이 바뀌면 다시 읽는다.
+
+// UAT 는 운영과 같은 SharePoint 리스트·설정 파일을 본다.
+// 따라서 UAT 에서 세대를 추가하거나 전환하면 운영 설정(acc_voucher_volumes.json)이
+// 그대로 바뀌어, 운영 사용자의 신규 전표가 엉뚱한 목록에 쌓인다.
+// 리스트를 분리하기 전까지 UAT 에서는 설정 쓰기만 막는다.
+// 조회·상신·결재는 그대로 동작한다 (테스트 목적이므로 업무 흐름은 유지).
+const IS_UAT = true;
 async function _getConfigDocDrive() {
   if(!siteId){const s=await api('/sites/'+SITE_PATH_DB);siteId=s.id;}
   const drivesRes = await api('/sites/' + siteId + '/drives');
@@ -1125,7 +1132,9 @@ async function loadVolumeConfig() {
       _volConfigTag = tag;
     } else {
       VOL_CONFIG = { reqList: DEFAULT_LIST_REQUESTS, currentApr: 'APR01', aprVolumes: [{ code:'APR01', id:DEFAULT_LIST_APPROVALS, label:'', startDate:'' }] };
-      await saveVolumeConfig();
+      // 설정 파일이 없으면 운영에서는 기본값으로 새로 만든다.
+      // UAT 는 운영 파일을 건드리면 안 되므로 메모리에만 두고 넘어간다.
+      if (!IS_UAT) await saveVolumeConfig();
     }
   } catch(e) {
     // 이미 정상적으로 읽어둔 설정이 있으면 그대로 쓴다.
@@ -1142,6 +1151,13 @@ async function loadVolumeConfig() {
   return VOL_CONFIG;
 }
 async function saveVolumeConfig() {
+  if (IS_UAT) {
+    const msg = 'UAT 는 운영과 같은 설정 파일을 사용합니다.\n'
+              + '여기서 세대를 바꾸면 운영 전표가 잘못된 목록에 쌓이므로 저장을 막았습니다.\n\n'
+              + '세대 관리는 운영 화면(acc-voucher.startruckkorea.com)에서만 진행해 주세요.';
+    console.warn('[UAT] 세대 설정 저장 차단');
+    throw new Error(msg);
+  }
   // 저장하면 파일 eTag 가 바뀐다. 저장한 브라우저는 방금 쓴 값을 그대로 갖고 있으므로
   // 태그를 비워 다음 호출에서 서버 값을 한 번 다시 읽게 한다 (다른 세션의 변경까지 함께 반영).
   _volConfigTag = '';
@@ -4705,6 +4721,13 @@ function openVolumeModal() {
   const rawUserEmail = (user?.email||user?.username||'').toLowerCase();
   if(!IT_EMAILS.map(e=>e.toLowerCase()).includes(rawUserEmail)){
     showAccAlert('접근 권한이 없습니다', 'Approvals 세대 관리는 IT 담당자만 사용할 수 있습니다.', '🔒');
+    return;
+  }
+  // 저장 자체는 saveVolumeConfig 에서 막지만, 여기서 미리 알려 헛수고를 줄인다.
+  if (IS_UAT) {
+    showAccAlert('UAT 에서는 사용할 수 없습니다',
+      'UAT 는 운영과 같은 설정 파일을 사용합니다. 여기서 세대를 바꾸면 운영 전표가 잘못된 목록에 쌓입니다.\n'
+      + '세대 관리는 운영 화면(acc-voucher.startruckkorea.com)에서 진행해 주세요.', '🔒');
     return;
   }
   document.getElementById('volume-modal').classList.add('open');
