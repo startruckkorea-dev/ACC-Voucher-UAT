@@ -315,7 +315,10 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
   background:transparent;flex-shrink:0;box-sizing:border-box}
 .draft-toggle.on .dt-dot{border-color:#fff;background:#fff}
 .draft-toggle .dt-n{font-weight:800}
-.draft-toggle .dt-state{font-size:.68rem;font-weight:600;opacity:.75}
+/* 상태는 작은 배지로 띄워 색과 별개로도 읽히게 한다 */
+.draft-toggle .dt-state{font-size:.62rem;font-weight:800;letter-spacing:.4px;
+  background:#eef6ee;color:#107c10;border-radius:8px;padding:1px 6px;line-height:1.5}
+.draft-toggle.on .dt-state{background:rgba(255,255,255,.22);color:#fff}
 .badge-철회{background:#f1f5f9;color:#64748b;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .list-empty { text-align: center; padding: 48px; color: #a19f9d; font-size: 14px; }
 
@@ -521,7 +524,7 @@ if (new URLSearchParams(location.search).get('openId')) {
         <div class="card-title" style="margin-bottom:0">전표 목록</div>
         <button id="my-draft-toggle" class="draft-toggle" onclick="toggleDraftView('my')"
           title="임시저장(Draft) 전표만 따로 봅니다. 평소 목록에서는 보이지 않습니다.">
-          <span class="dt-dot"></span>Draft<span class="dt-n" id="my-draft-count"></span>
+          <span class="dt-dot"></span>Draft<span class="dt-n" id="my-draft-count"></span><span class="dt-state" id="my-draft-state">OFF</span>
         </button>
       </div>
       <div class="list-filters">
@@ -884,7 +887,7 @@ if (new URLSearchParams(location.search).get('openId')) {
     <input type="text" id="admin-search" oninput="applyAdminFilters()" placeholder="신청자/Title/BP명" style="border:1px solid #d2d0ce;border-radius:4px;padding:6px 10px;font-size:.72rem;font-family:inherit;min-width:200px">
     <button id="admin-draft-toggle" class="draft-toggle" onclick="toggleDraftView('admin')"
       title="직원들이 저장한 임시저장(Draft) 전표만 봅니다. 결재로 올라가기 전에 여기서 확인합니다.">
-      <span class="dt-dot"></span>Draft<span class="dt-n" id="admin-draft-count"></span><span class="dt-state" id="admin-draft-state">보기</span>
+      <span class="dt-dot"></span>Draft<span class="dt-n" id="admin-draft-count"></span><span class="dt-state" id="admin-draft-state">OFF</span>
     </button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
       <span style="font-size:.82rem;color:#605e5c;font-weight:500" id="admin-count"></span>
