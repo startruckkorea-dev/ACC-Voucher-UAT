@@ -1780,7 +1780,9 @@ function uatHandle(path, method, body) {
     if (!_uatDB.seqBy) _uatDB.seqBy = {};
     if (!_uatDB.seqBy[_role]) _uatDB.seqBy[_role] = _role === 'DRAFT' ? 0 : 90000;
     const id = String(++_uatDB.seqBy[_role]);
-    const rec = { id, fields: Object.assign({ id }, (body && body.fields) || {}) };
+    // 목록 정렬이 만든 시각을 쓰므로 운영과 같게 채워 준다.
+    const rec = { id, createdDateTime: new Date().toISOString(),
+                  fields: Object.assign({ id }, (body && body.fields) || {}) };
     bucket[id] = rec; _uatSaveDB();
     console.warn('[UAT] 샌드박스 생성 —', listId.slice(0, 8), id);
     return JSON.parse(JSON.stringify(rec));
@@ -4797,6 +4799,23 @@ const TYPE_LABEL={AP:'AP',AP_IMS:'AP (IMS)',AP_CR:'AP (CR)',AR:'AR',GL:'GL',FA:'
 const TYPE_LABEL_FULL={AP:'AP - Accounts Payable',AP_IMS:'AP (IMS) - 부품',AP_CR:'AP - Customer Refund',AR:'AR - Accounts Receivable',GL:'GL - General Ledger',FA:'Fixed Asset',ADV:'Advance Payment',SET:'Settlement of Advance'};
 let voucherListCache = []; // SharePoint에서 로드한 내 전표 캐시
 
+// 최신순 정렬. 상신본은 SubmittedDate 로, 임시저장은 만든 시각으로 비교한다.
+// 임시저장은 SubmittedDate 가 없어 예전에는 두 값이 모두 0 이 되어
+// 비교 결과가 0 → 조회된 순서 그대로 남았다(오래된 Draft 가 위로 올라옴).
+// 시각이 같거나 둘 다 없으면 항목 id 로 갈라, 나중에 만든 것이 항상 위에 오게 한다.
+function _byNewest(a, b) {
+  const t = x => {
+    const v = x.SubmittedDate || x._created || '';
+    const n = v ? new Date(v).getTime() : 0;
+    return isNaN(n) ? 0 : n;
+  };
+  const d = t(b) - t(a);
+  if (d) return d;
+  // 같은 리스트 안에서만 id 비교가 의미 있다. 다른 리스트끼리는 순서를 바꾸지 않는다.
+  if (!!a._srcDraft === !!b._srcDraft) return Number(b._spId||0) - Number(a._spId||0);
+  return 0;
+}
+
 async function loadMyList() {
   if(!siteId){const s=await api('/sites/'+SITE_PATH_DB);siteId=s.id;}
   await loadVolumeConfig(); applyCurrentVolume();
@@ -4812,9 +4831,11 @@ async function loadMyList() {
       apiAll(_mk(LIST_DRAFTS)).catch(e => { console.warn('[Draft] 임시저장 조회 실패:', e.message); return {value:[]}; }),
     ]);
     voucherListCache = [
-      ...reqData.value.map(item=>({_spId:item.id, _srcDraft:false, ...item.fields})),
-      ...draftData.value.map(item=>({_spId:item.id, _srcDraft:true, ...item.fields})),
-    ].sort((a,b)=>new Date(b.SubmittedDate||b.Created||0)-new Date(a.SubmittedDate||a.Created||0));
+      // createdDateTime 은 fields 가 아니라 항목 자체에 있다. Draft 는 SubmittedDate 가 없어
+      // 이 값이 없으면 정렬 기준이 사라져 조회된 순서 그대로 남는다.
+      ...reqData.value.map(item=>({_spId:item.id, _srcDraft:false, _created:item.createdDateTime||'', ...item.fields})),
+      ...draftData.value.map(item=>({_spId:item.id, _srcDraft:true, _created:item.createdDateTime||'', ...item.fields})),
+    ].sort(_byNewest);
   } catch(e) {
     console.error('loadMyList error:', e);
     voucherListCache = [];
@@ -5157,9 +5178,9 @@ async function loadAdminList() {
         .catch(e => { console.warn('[Draft] 임시저장 조회 실패:', e.message); return {value:[]}; }),
     ]);
     adminListRaw = [
-      ...data.value.map(item=>({_spId:item.id, _srcDraft:false, ...item.fields})),
-      ...draftData.value.map(item=>({_spId:item.id, _srcDraft:true, ...item.fields})),
-    ].sort((a,b)=>new Date(b.SubmittedDate||b.Created||0)-new Date(a.SubmittedDate||a.Created||0));
+      ...data.value.map(item=>({_spId:item.id, _srcDraft:false, _created:item.createdDateTime||'', ...item.fields})),
+      ...draftData.value.map(item=>({_spId:item.id, _srcDraft:true, _created:item.createdDateTime||'', ...item.fields})),
+    ].sort(_byNewest);
     // 진행이 멈춘 전표 식별 — 전표는 '대기'인데 '대기' 결재 행이 하나도 없는 건.
     // 철회가 중간에 끊기면 생기며, 겉으로는 정상 대기처럼 보여 방치되기 쉽다.
     // 표식은 IT 담당자(config: ACC-Voucher_IT)에게만 보이므로, 대상이 아니면 조회 자체를 생략한다.
