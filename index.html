@@ -5889,8 +5889,8 @@ async function resumeDraft(spId) {
     // 환율은 임시저장 때 값이 아니라 오늘 값을 쓴다.
     // 한 달 전 임시저장을 열면 그때 환율이 들어가는데, 그대로 상신하면
     // 원화 환산액이 달라져 결재 단계가 잘못 지정된다.
-    // 상신일 기준이 맞으므로 resetForm 이 채워 둔 오늘 환율을 그대로 둔다.
-    // (참고용으로 임시저장 당시 환율은 아래에서 안내한다)
+    // 오늘 환율을 받아 두지 못한 경우에만 임시저장 값을 남겨 둔다.
+    // 둘 다 버리면 환율칸이 비어 상신 단계에서 막히고, 사용자는 원인을 알기 어렵다.
     const _rateMap = {};
     String(spText(f.ExchangeRate || '')).split(/[;,\n]/).forEach(seg => {
       const kv = seg.split(':');
@@ -5901,14 +5901,24 @@ async function resumeDraft(spId) {
     // (화면 로딩 때 받아 둔 _cachedRates 가 오늘 환율이다)
     const _today = window._cachedRates || {};
     const _rateDiff = [];
+    let _rateStale = false;   // 오늘 환율이 없어 임시저장 값을 그대로 쓴 통화가 있는가
     Object.entries(_rateId).forEach(([cur, id]) => {
       const el = document.getElementById(id);
       if (!el) return;
       const now = parseFloat(_today[cur]);
-      if (now > 0) { el.value = now; if (cur === 'EUR') el.dispatchEvent(new Event('input')); }
       const old = parseFloat(_rateMap[cur]);
-      if (old > 0 && now > 0 && Math.abs(old - now) >= 0.01) {
-        _rateDiff.push(cur + '  ' + old.toLocaleString('ko-KR') + ' → ' + now.toLocaleString('ko-KR'));
+      if (now > 0) {
+        el.value = now;
+        if (cur === 'EUR') el.dispatchEvent(new Event('input'));
+        if (old > 0 && Math.abs(old - now) >= 0.01) {
+          _rateDiff.push(cur + '  ' + old.toLocaleString('ko-KR') + ' → ' + now.toLocaleString('ko-KR'));
+        }
+      } else if (old > 0) {
+        // 오늘 환율을 아직 못 받았다 — 빈칸으로 두면 상신 단계에서 막힌다.
+        // 임시저장 값을 임시로 넣어 두고 확인하라고 알린다.
+        el.value = old;
+        if (cur === 'EUR') el.dispatchEvent(new Event('input'));
+        _rateStale = true;
       }
     });
     const _pt = document.getElementById('v-purpose-title');
@@ -5934,7 +5944,10 @@ async function resumeDraft(spId) {
       + '· 고칠 부분이 있으면 지금 수정합니다.\n'
       + '\n'
       + '2단계  환율\n'
-      + '· 오늘 환율로 새로 채워졌습니다. 임시저장 때 값이 아닙니다.\n'
+      + (_rateStale
+          ? '· 오늘 환율을 아직 받지 못해 임시저장 때 값이 들어 있습니다.\n'
+            + '· 상단 Exchange Rate 를 오늘 값으로 확인해 주세요.\n'
+          : '· 오늘 환율로 새로 채워졌습니다. 임시저장 때 값이 아닙니다.\n')
       + (_rateDiff.length
           ? '· 바뀐 통화 : ' + _rateDiff.join(' / ') + '\n'
           : '')
