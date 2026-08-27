@@ -4298,8 +4298,11 @@ async function saveVoucher(status) {
         : '결재선이 정상적으로 생성되었습니다.');
     } else if (_isDraft) {
       showAccAlert('임시저장되었습니다.',
-        'Voucher ID: ' + voucherId + '\n\n'
-        + '결재는 올라가지 않았습니다. [내 전표 목록]에서 「이어서 작성」으로 다시 불러올 수 있습니다.', '📝');
+        voucherId + '\n\n'
+        + '결재는 올라가지 않았습니다.\n'
+        + '[내 전표 목록] → 오른쪽 위 「Draft」 를 누르면 다시 열 수 있습니다.\n\n'
+        + 'Accounting 담당자에게 위 번호를 알려 주시면\n'
+        + '상신 전에 내용을 미리 확인받을 수 있습니다.', '📝');
     } else {
       showAccAlert('저장되었습니다.', 'Voucher ID: '+voucherId, '✅');
     }
@@ -8037,11 +8040,17 @@ function ptApply(){
       <div style="font-size:1.02rem;font-weight:700;color:#1e293b">임시저장 하시겠습니까?</div>
       <div style="font-size:.8rem;color:#64748b;margin-top:6px;line-height:1.6">결재는 올라가지 않습니다. 작성 중인 내용만 보관합니다.</div>
     </div>
-    <div style="margin:16px 26px 0;padding:12px 14px;background:#f8fafc;border:1px solid #e6ebf1;border-radius:8px;font-size:.76rem;color:#475569;line-height:1.75">
+    <div style="margin:16px 26px 0;padding:13px 15px;background:#f8fafc;border:1px solid #e6ebf1;border-radius:8px;font-size:.76rem;color:#475569;line-height:1.75">
       <div style="display:flex;gap:8px"><span style="color:#107c10;flex-shrink:0">•</span><span><b style="color:#1e293b">결재자에게 알림이 가지 않습니다.</b> 상신은 나중에 [Submit] 으로 하시면 됩니다.</span></div>
-      <div style="display:flex;gap:8px;margin-top:5px"><span style="color:#107c10;flex-shrink:0">•</span><span><b style="color:#1e293b">[내 전표 목록] 의 Draft</b> 에서 다시 열어 이어서 작성할 수 있습니다.</span></div>
-      <div style="display:flex;gap:8px;margin-top:5px"><span style="color:#107c10;flex-shrink:0">•</span><span>첨부파일도 함께 보관되며, 상신할 때 그대로 넘어갑니다.</span></div>
-      <div id="draft-confirm-warn" style="display:none;margin-top:9px;padding-top:9px;border-top:1px dashed #cbd5e1;color:#8a6116"></div>
+      <div style="display:flex;gap:8px;margin-top:6px"><span style="color:#107c10;flex-shrink:0">•</span><span>다시 열려면 <b style="color:#1e293b">[내 전표 목록]</b> 으로 간 뒤, 목록 오른쪽 위의 <span style="display:inline-flex;align-items:center;gap:4px;background:#fff;color:#107c10;border:1px solid #a7d7a7;border-radius:12px;padding:0 8px;font-size:.68rem;font-weight:700;vertical-align:middle">● Draft</span> 를 눌러 주세요. 평소 목록에는 보이지 않습니다.</span></div>
+      <div style="display:flex;gap:8px;margin-top:6px"><span style="color:#107c10;flex-shrink:0">•</span><span>첨부파일도 함께 보관되며, 상신할 때 그대로 넘어갑니다.</span></div>
+
+      <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #cbd5e1">
+        <div style="display:flex;gap:8px"><span style="color:#0078d4;flex-shrink:0">•</span><span><b style="color:#1e293b">상신 전에 Accounting 담당자의 확인을 받을 수 있습니다.</b><br>담당자도 <b>관리자 탭 → Draft</b> 에서 임시저장 전표를 볼 수 있으니, 저장 후 안내되는 <b>Draft 번호</b>를 알려 주시면 미리 검토받을 수 있습니다.</span></div>
+        <div style="display:flex;gap:8px;margin-top:6px"><span style="color:#0078d4;flex-shrink:0">•</span><span>상신하면 <b>그날 날짜로 새 전표 번호</b>가 부여됩니다. 오래 전에 임시저장했더라도 <b>신청일은 상신한 날</b>이 됩니다.</span></div>
+      </div>
+
+      <div id="draft-confirm-warn" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed #cbd5e1;color:#8a6116"></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding:18px 26px 20px">
       <button onclick="closeDraftConfirm()" style="padding:9px 18px;border:1px solid #d2d0ce;border-radius:7px;background:#fff;color:#605e5c;font-size:.83rem;font-weight:600;cursor:pointer;font-family:inherit">취소</button>
