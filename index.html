@@ -264,19 +264,24 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 .badge-승인완료{background:#dff6dd;color:#107c10;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .badge-반려{background:#fde7e9;color:#a4262c;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .badge-임시저장{background:#eef2f7;color:#475569;border:1px dashed #94a3b8;border-radius:10px;padding:1px 8px;font-size:.68rem;font-weight:600}
-.btn-draft{background:#fff;color:#475569;border:1px solid #94a3b8;border-radius:6px;padding:9px 20px;
+.btn-draft{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#107c10;
+  border:1px solid #a7d7a7;border-radius:6px;padding:9px 20px;
   font-size:.86rem;font-weight:700;cursor:pointer;font-family:inherit}
-.btn-draft:hover{background:#f1f5f9}
+.btn-draft:hover{background:#f2faf2;border-color:#107c10}
+.btn-draft .bd-dot{width:7px;height:7px;border-radius:50%;background:#107c10;flex-shrink:0}
 /* Draft 전용 보기 토글 — 평소 목록에서는 임시저장을 감추고, 이 버튼으로만 꺼내 본다.
-   결재로 올라가지 않은 작성 중 전표가 일반 목록에 섞이지 않게 하려는 것. */
-.draft-toggle{display:inline-flex;align-items:center;gap:5px;background:#fff;color:#107c10;
-  border:1px solid #a7d7a7;border-radius:6px;padding:5px 12px;font-size:.74rem;font-weight:700;
-  cursor:pointer;font-family:inherit;white-space:nowrap}
-.draft-toggle:hover{background:#f2faf2}
-.draft-toggle.on{background:#107c10;color:#fff;border-color:#107c10}
-.draft-toggle .dt-dot{width:7px;height:7px;border-radius:50%;background:#107c10;flex-shrink:0}
-.draft-toggle.on .dt-dot{background:#fff}
-.draft-toggle .dt-n{font-size:.7rem;opacity:.85}
+   켜짐/꺼짐이 색만으로 구분되면 알아보기 어려워, 문구와 표시등을 함께 바꾼다. */
+.draft-toggle{display:inline-flex;align-items:center;gap:7px;background:#fff;color:#107c10;
+  border:1px solid #a7d7a7;border-radius:16px;padding:5px 14px 5px 10px;font-size:.74rem;font-weight:700;
+  cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .12s}
+.draft-toggle:hover{background:#f2faf2;border-color:#107c10}
+.draft-toggle.on{background:#107c10;color:#fff;border-color:#107c10;box-shadow:0 1px 4px rgba(16,124,16,.3)}
+/* 표시등 — 꺼짐은 빈 원, 켜짐은 채워진 흰 원 */
+.draft-toggle .dt-dot{width:11px;height:11px;border-radius:50%;border:2px solid #107c10;
+  background:transparent;flex-shrink:0;box-sizing:border-box}
+.draft-toggle.on .dt-dot{border-color:#fff;background:#fff}
+.draft-toggle .dt-n{font-weight:800}
+.draft-toggle .dt-state{font-size:.68rem;font-weight:600;opacity:.75}
 .badge-철회{background:#f1f5f9;color:#64748b;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .list-empty { text-align: center; padding: 48px; color: #a19f9d; font-size: 14px; }
 
@@ -793,9 +798,11 @@ if (new URLSearchParams(location.search).get('openId')) {
       <div id="appr-blocks-container"></div>
 
       <div class="btn-row">
-        <button class="btn-secondary" onclick="resetForm()">Reset</button>
         <button class="btn-draft" onclick="saveVoucher(DRAFT_STATUS)"
-          title="결재를 올리지 않고 저장만 합니다. 이 전표는 ACC Voucher 안에서만 보이며, 내 전표 목록에서 다시 불러올 수 있습니다.">Draft</button>
+          title="결재를 올리지 않고 저장만 합니다. 내 전표 목록의 Draft 보기에서 다시 불러올 수 있습니다.">
+          <span class="bd-dot"></span>Draft
+        </button>
+        <button class="btn-secondary" onclick="resetForm()">Reset</button>
         <button class="btn-primary" onclick="saveVoucher('대기')">Submit</button>
       </div>
     </div>
@@ -843,7 +850,7 @@ if (new URLSearchParams(location.search).get('openId')) {
     <input type="text" id="admin-search" oninput="applyAdminFilters()" placeholder="신청자/Title/BP명" style="border:1px solid #d2d0ce;border-radius:4px;padding:6px 10px;font-size:.72rem;font-family:inherit;min-width:200px">
     <button id="admin-draft-toggle" class="draft-toggle" onclick="toggleDraftView('admin')"
       title="직원들이 저장한 임시저장(Draft) 전표만 봅니다. 결재로 올라가기 전에 여기서 확인합니다.">
-      <span class="dt-dot"></span>Draft<span class="dt-n" id="admin-draft-count"></span>
+      <span class="dt-dot"></span>Draft<span class="dt-n" id="admin-draft-count"></span><span class="dt-state" id="admin-draft-state">보기</span>
     </button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
       <span style="font-size:.82rem;color:#605e5c;font-weight:500" id="admin-count"></span>
@@ -5528,9 +5535,21 @@ const _draftView = { my: false, admin: false };
 
 function toggleDraftView(scope) {
   _draftView[scope] = !_draftView[scope];
-  const btn = document.getElementById(scope === 'my' ? 'my-draft-toggle' : 'admin-draft-toggle');
-  if (btn) btn.classList.toggle('on', _draftView[scope]);
+  _syncDraftToggle(scope);
   if (scope === 'my') renderList(); else applyAdminFilters();
+}
+// 켜짐/꺼짐을 색·표시등·문구 세 가지로 함께 보여준다 (색만으로는 구분이 어렵다)
+function _syncDraftToggle(scope) {
+  const on = _draftView[scope];
+  const btn = document.getElementById(scope === 'my' ? 'my-draft-toggle' : 'admin-draft-toggle');
+  const st  = document.getElementById(scope === 'my' ? 'my-draft-state'  : 'admin-draft-state');
+  if (btn) {
+    btn.classList.toggle('on', on);
+    btn.title = on
+      ? '임시저장(Draft) 전표만 보고 있습니다. 다시 누르면 일반 목록으로 돌아갑니다.'
+      : '임시저장(Draft) 전표만 따로 봅니다. 평소 목록에서는 보이지 않습니다.';
+  }
+  if (st) st.textContent = on ? '보는 중' : '보기';
 }
 
 // 토글 옆에 임시저장 건수를 띄운다. 0 이면 숫자를 감춘다.
@@ -5539,6 +5558,7 @@ function refreshDraftCount(scope) {
   const n = src.filter(v => (v.Status||'').trim() === DRAFT_STATUS).length;
   const el = document.getElementById(scope === 'my' ? 'my-draft-count' : 'admin-draft-count');
   if (el) el.textContent = n ? ' ' + n : '';
+  _syncDraftToggle(scope);
 }
 
 // ── 임시저장(Draft) 이어서 작성 · 삭제 ──────────────────────────────────
