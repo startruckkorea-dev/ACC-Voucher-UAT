@@ -1634,7 +1634,14 @@ function _uatListIdOf(path) {
   const p = String(path || '');
   const ids = [LIST_REQUESTS, LIST_APPROVALS,
     ...((typeof VOL_CONFIG !== 'undefined' && VOL_CONFIG && VOL_CONFIG.aprVolumes) || []).map(v => v.id)];
-  return ids.find(id => id && p.includes(id)) || null;
+  const hit = ids.find(id => id && p.includes(id));
+  if (hit) return hit;
+  // 설정이 아직 로드되지 않았거나 새로 만든 세대라 목록에 없을 수 있다.
+  // /lists/{id}/items 형태면 목록 조회이므로 그 id 를 그대로 샌드박스 키로 쓴다.
+  // (SSC_Requests 는 PKF 열람 범위 판정에 필요한 다른 시스템 데이터라 제외한다)
+  const m = /\/lists\/([^/?]+)\/(?:items|columns)/.exec(p);
+  if (m && m[1] !== SSC_REQ_LIST_ID) return m[1];
+  return null;
 }
 
 // $filter=fields/X eq N  ·  fields/X eq 'S'  형태만 해석한다 (이 시스템이 쓰는 전부)
@@ -1656,6 +1663,10 @@ function _uatMatchFilter(fields, path) {
 // api()/apiAll() 이 두 목록을 향할 때 대신 응답한다. 대상이 아니면 null 을 돌려준다.
 function uatHandle(path, method, body) {
   if (!IS_UAT) return null;
+  // 첨부 라이브러리는 업로드도 조회도 하지 않는다. 빈 폴더처럼 응답한다.
+  if (String(path || '').includes('ACC-Voucher_AttachedFiles')) {
+    return method === 'GET' ? { value: [] } : { id: 'uat-file-' + Date.now() };
+  }
   const listId = _uatListIdOf(path);
   if (!listId) return null;
   const p = String(path || '');
