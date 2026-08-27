@@ -292,11 +292,15 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 .badge-승인완료{background:#dff6dd;color:#107c10;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .badge-반려{background:#fde7e9;color:#a4262c;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .badge-임시저장{background:#eef2f7;color:#475569;border:1px dashed #94a3b8;border-radius:10px;padding:1px 8px;font-size:.68rem;font-weight:600}
-.btn-draft{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#107c10;
-  border:1px solid #a7d7a7;border-radius:6px;padding:9px 20px;
-  font-size:.86rem;font-weight:700;cursor:pointer;font-family:inherit}
-.btn-draft:hover{background:#f2faf2;border-color:#107c10}
-.btn-draft .bd-dot{width:7px;height:7px;border-radius:50%;background:#107c10;flex-shrink:0}
+/* Draft Submit — 결재를 올리지 않고 저장만 하는 동작.
+   Submit(파랑)과 나란히 놓이므로 같은 채움 버튼으로 두되 색으로 구분한다. */
+.btn-draft{display:inline-flex;align-items:center;gap:7px;background:#107c10;color:#fff;
+  border:none;border-radius:6px;padding:9px 22px;
+  font-size:.86rem;font-weight:700;cursor:pointer;font-family:inherit;
+  box-shadow:0 1px 3px rgba(16,124,16,.28)}
+.btn-draft:hover{background:#0e6b0e}
+.btn-draft:active{background:#0c5c0c}
+.btn-draft .bd-dot{width:7px;height:7px;border-radius:50%;background:#fff;flex-shrink:0;opacity:.9}
 /* Draft 전용 보기 토글 — 평소 목록에서는 임시저장을 감추고, 이 버튼으로만 꺼내 본다.
    켜짐/꺼짐이 색만으로 구분되면 알아보기 어려워, 문구와 표시등을 함께 바꾼다. */
 .draft-toggle{display:inline-flex;align-items:center;gap:7px;background:#fff;color:#107c10;
@@ -828,7 +832,7 @@ if (new URLSearchParams(location.search).get('openId')) {
       <div class="btn-row">
         <button class="btn-draft" onclick="saveVoucher(DRAFT_STATUS)"
           title="결재를 올리지 않고 저장만 합니다. 내 전표 목록의 Draft 보기에서 다시 불러올 수 있습니다.">
-          <span class="bd-dot"></span>Draft
+          <span class="bd-dot"></span>Draft Submit
         </button>
         <button class="btn-secondary" onclick="resetForm()">Reset</button>
         <button class="btn-primary" onclick="saveVoucher('대기')">Submit</button>
@@ -4197,7 +4201,7 @@ async function saveVoucher(status) {
         spStep('appr','err', _made+' / '+approvers.length);
         console.error('[상신] 결재선 생성 실패:', ae && ae.message);
         await rollbackIncompleteVoucher(requestId, voucherId, _made, approvers.length);
-        if(btn){btn.disabled=false; btn.textContent = _isDraft ? 'Draft' : 'Submit';}
+        if(btn){btn.disabled=false; _isDraft ? (btn.innerHTML = '<span class="bd-dot"></span>Draft Submit') : (btn.textContent = 'Submit');}
         return;   // 완료 안내로 넘어가지 않는다
       }
       // 만들어진 행 수를 서버에서 다시 세어 확인한다. POST가 200을 받고도 반영되지 않는 경우를 잡는다.
@@ -4208,7 +4212,7 @@ async function saveVoucher(status) {
           spStep('appr','err', _cnt+' / '+approvers.length);
           console.error('[상신] 결재선 개수 불일치:', _cnt, '/', approvers.length);
           await rollbackIncompleteVoucher(requestId, voucherId, _cnt, approvers.length);
-          if(btn){btn.disabled=false; btn.textContent = _isDraft ? 'Draft' : 'Submit';}
+          if(btn){btn.disabled=false; _isDraft ? (btn.innerHTML = '<span class="bd-dot"></span>Draft Submit') : (btn.textContent = 'Submit');}
           return;
         }
         // 초과(중복)도 확인한다. 같은 차수가 두 줄이면 한 줄을 승인해도 나머지가 대기로 남아
@@ -4259,7 +4263,7 @@ async function saveVoucher(status) {
       + '목록에 없으면 다시 상신해 주세요.');
     else showAccAlert('오류가 발생했습니다.', e.message, '⚠️');
   } finally {
-    if(btn){btn.disabled=false; btn.textContent = _isDraft ? 'Draft' : 'Submit';}
+    if(btn){btn.disabled=false; _isDraft ? (btn.innerHTML = '<span class="bd-dot"></span>Draft Submit') : (btn.textContent = 'Submit');}
   }
 }
 
