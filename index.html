@@ -411,6 +411,9 @@ if (new URLSearchParams(location.search).get('openId')) {
   UAT 테스트 환경 — 실제 업무용이 아닙니다. 운영 시스템은 acc-voucher.startruckkorea.com 입니다.
   <span style="display:block;font-size:10.5px;font-weight:500;opacity:.9;margin-top:1px">
     상신·결재를 포함한 모든 작업이 데이터베이스에 기록되지 않으며, 이 환경에서 작업한 내용은 어디에도 저장되지 않습니다.
+    작성한 전표는 이 브라우저 탭에서만 보이고 탭을 닫으면 사라집니다.
+    <a href="#" onclick="uatResetSandbox();location.reload();return false;"
+       style="color:#fff;text-decoration:underline;margin-left:6px">테스트 내용 비우기</a>
   </span>
 </div>
 <div id="login-screen">
@@ -1591,11 +1594,118 @@ function _uatBlockedWrite(path, method) {
       || p.includes('ACC-Voucher_AttachedFiles');
 }
 
+// ── UAT 샌드박스 저장소 ────────────────────────────────────────────────
+// UAT 는 운영 Requests·Approvals 목록을 아예 건드리지 않는다. 읽기도 하지 않는다.
+// 두 목록에 대한 모든 요청을 여기서 가로채, 브라우저 안의 임시 저장소로만 처리한다.
+// 그래서 UAT 에서 상신한 전표는 UAT 화면에만 보이고, 운영 전표는 UAT 에 나타나지 않는다.
+// 탭을 닫으면 sessionStorage 와 함께 사라진다 (서버에는 아무것도 남지 않는다).
+const UAT_STORE_KEY = 'uatSandbox.v1';
+// 새로고침해도 작업 내용이 남도록 sessionStorage 에 함께 둔다. 탭을 닫으면 사라진다.
+let _uatDB = { seq: 90000, items: {} };   // items[listId][itemId] = { id, fields }
+
+function _uatLoadDB() {
+  try {
+    const raw = sessionStorage.getItem(UAT_STORE_KEY);
+    if (raw) _uatDB = JSON.parse(raw);
+  } catch (e) { console.warn('[UAT] 저장소 복원 실패, 새로 시작합니다:', e.message); }
+  if (!_uatDB || typeof _uatDB !== 'object') _uatDB = { seq: 90000, items: {} };
+  if (!_uatDB.items) _uatDB.items = {};
+  if (!_uatDB.seq) _uatDB.seq = 90000;
+}
+function _uatSaveDB() {
+  try { sessionStorage.setItem(UAT_STORE_KEY, JSON.stringify(_uatDB)); }
+  catch (e) { console.warn('[UAT] 저장소 기록 실패(무시됨):', e.message); }
+}
+function uatResetSandbox() {
+  _uatDB = { seq: 90000, items: {} };
+  _uatSaveDB();
+  console.warn('[UAT] 샌드박스를 비웠습니다.');
+}
+if (IS_UAT) _uatLoadDB();
+
+function _uatBucket(listId) {
+  if (!_uatDB.items[listId]) _uatDB.items[listId] = {};
+  return _uatDB.items[listId];
+}
+
+// 이 경로가 Requests/Approvals 목록을 향하는지 판별한다.
+// 목록 id 로만 판단하므로, 세대가 늘어도 VOL_CONFIG 에 등록된 id 는 모두 걸린다.
+function _uatListIdOf(path) {
+  const p = String(path || '');
+  const ids = [LIST_REQUESTS, LIST_APPROVALS,
+    ...((typeof VOL_CONFIG !== 'undefined' && VOL_CONFIG && VOL_CONFIG.aprVolumes) || []).map(v => v.id)];
+  return ids.find(id => id && p.includes(id)) || null;
+}
+
+// $filter=fields/X eq N  ·  fields/X eq 'S'  형태만 해석한다 (이 시스템이 쓰는 전부)
+function _uatMatchFilter(fields, path) {
+  const m = /\$filter=([^&]+)/.exec(String(path || ''));
+  if (!m) return true;
+  const expr = decodeURIComponent(m[1]);
+  const re = /fields\/(\w+)\s+eq\s+('([^']*)'|[\d.]+)/g;
+  let mm, ok = true;
+  while ((mm = re.exec(expr)) !== null) {
+    const key = mm[1];
+    const want = mm[3] !== undefined ? mm[3] : mm[2];
+    const got = fields[key];
+    if (String(got == null ? '' : got) !== String(want)) ok = false;
+  }
+  return ok;
+}
+
+// api()/apiAll() 이 두 목록을 향할 때 대신 응답한다. 대상이 아니면 null 을 돌려준다.
+function uatHandle(path, method, body) {
+  if (!IS_UAT) return null;
+  const listId = _uatListIdOf(path);
+  if (!listId) return null;
+  const p = String(path || '');
+  const bucket = _uatBucket(listId);
+  const idm = /\/items\/([^/?]+)/.exec(p);
+  const itemId = idm ? idm[1] : null;
+
+  // 컬럼 정의 조회/생성 — 샌드박스에서는 항상 성공한 것처럼 둔다
+  if (p.includes('/columns')) return method === 'GET' ? { value: [] } : { id: 'uat-col' };
+
+  if (method === 'POST') {
+    const id = String(++_uatDB.seq);
+    const rec = { id, fields: Object.assign({ id }, (body && body.fields) || {}) };
+    bucket[id] = rec; _uatSaveDB();
+    console.warn('[UAT] 샌드박스 생성 —', listId.slice(0, 8), id);
+    return JSON.parse(JSON.stringify(rec));
+  }
+  if (method === 'PATCH' && itemId) {
+    const rec = bucket[itemId] || (bucket[itemId] = { id: itemId, fields: { id: itemId } });
+    Object.assign(rec.fields, (body && body.fields) ? body.fields : (body || {}));
+    _uatSaveDB();
+    return p.endsWith('/fields')
+      ? JSON.parse(JSON.stringify(rec.fields))
+      : JSON.parse(JSON.stringify(rec));
+  }
+  if (method === 'DELETE' && itemId) { delete bucket[itemId]; _uatSaveDB(); return null; }
+
+  // GET
+  if (itemId) {
+    const rec = bucket[itemId];
+    if (!rec) { const e = new Error('itemNotFound'); e.uatNotFound = true; throw e; }
+    return p.includes('/fields')
+      ? JSON.parse(JSON.stringify(rec.fields))
+      : JSON.parse(JSON.stringify(rec));
+  }
+  const rows = Object.values(bucket)
+    .filter(r => _uatMatchFilter(r.fields, p))
+    .map(r => JSON.parse(JSON.stringify(r)));
+  return { value: rows };
+}
+
 async function api(path,method='GET',body=null,_retry=0) {
-  if (_uatBlockedWrite(path, method)) {
-    console.warn(`[UAT] 저장 차단 — ${method} ${String(path).slice(0,90)}`);
-    // 호출부가 응답의 id 를 쓰는 경우가 있어 형태를 맞춘 가짜 값을 돌려준다.
-    return { id: 'uat-' + Date.now() + '-' + Math.random().toString(36).slice(2,8), fields: {} };
+  // UAT: 두 목록은 서버로 나가지 않고 브라우저 샌드박스에서 처리한다 (읽기도 포함).
+  if (IS_UAT) {
+    const r = uatHandle(path, method, body);
+    if (r !== null) return r;
+    if (_uatBlockedWrite(path, method)) {
+      console.warn(`[UAT] 저장 차단 — ${method} ${String(path).slice(0,90)}`);
+      return { id: 'uat-' + Date.now() + '-' + Math.random().toString(36).slice(2,8), fields: {} };
+    }
   }
   const t=await token();
   const opts={method,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'}};
@@ -1625,6 +1735,11 @@ async function api(path,method='GET',body=null,_retry=0) {
 
 // ── 페이지네이션 전체 조회 헬퍼 (GW/BP-Master 동일 패턴, nextLink 자동순회) ──
 async function apiAll(path) {
+  // UAT: 두 목록 조회는 샌드박스에서 바로 돌려준다 (페이지네이션 불필요).
+  if (IS_UAT) {
+    const r = uatHandle(path, 'GET', null);
+    if (r !== null) return r;
+  }
   let items = [], url = path;
   while(url) {
     // 페이지 단위로 재시도한다. 재시도가 없으면 스로틀 한 번에 조회 전체가 실패하고,
