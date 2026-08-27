@@ -836,7 +836,7 @@ if (new URLSearchParams(location.search).get('openId')) {
       <div id="appr-blocks-container"></div>
 
       <div class="btn-row">
-        <button class="btn-draft" onclick="saveVoucher(DRAFT_STATUS)"
+        <button class="btn-draft" onclick="askDraftSubmit()"
           title="결재를 올리지 않고 저장만 합니다. 내 전표 목록의 Draft 보기에서 다시 불러올 수 있습니다.">
           <span class="bd-dot"></span>Draft Submit
         </button>
@@ -5703,6 +5703,41 @@ function refreshDraftCount(scope) {
   _syncDraftToggle(scope);
 }
 
+// ── Draft Submit 확인 ──────────────────────────────────────────────────
+// 「Draft Submit」 은 이름만 봐서는 상신처럼 읽힐 수 있다.
+// 결재가 올라가지 않는다는 점을 누르기 전에 분명히 알린다.
+function askDraftSubmit() {
+  const type = (document.getElementById('v-type')?.value || '').trim();
+  const ptit = (document.getElementById('v-purpose-title')?.value || '').trim();
+  // 목록에서 구분해야 하므로 이 둘은 임시저장에도 필요하다. 팝업을 열기 전에 먼저 확인한다.
+  if (!type) { alert('Voucher Type을 선택하세요.'); return; }
+  if (!ptit) {
+    alert('Purpose Title을 입력하세요.\n\n임시저장 목록에서 어떤 전표인지 구분하는 데 쓰입니다.');
+    document.getElementById('v-purpose-title')?.focus();
+    return;
+  }
+  // 이어서 작성 중이면 원본이 정리된다는 점을 함께 알린다.
+  const warn = document.getElementById('draft-confirm-warn');
+  if (warn) {
+    if (_resumingDraftId) {
+      warn.style.display = 'block';
+      warn.textContent = '이어서 작성 중입니다. 저장하면 새 임시저장본이 만들어지고 이전 건은 정리됩니다.';
+    } else {
+      warn.style.display = 'none';
+      warn.textContent = '';
+    }
+  }
+  const ok = document.getElementById('draft-confirm-ok');
+  if (ok) ok.onclick = () => { closeDraftConfirm(); saveVoucher(DRAFT_STATUS); };
+  document.getElementById('draft-confirm').style.display = 'flex';
+  document.addEventListener('keydown', _draftConfirmEsc);
+}
+function closeDraftConfirm() {
+  document.getElementById('draft-confirm').style.display = 'none';
+  document.removeEventListener('keydown', _draftConfirmEsc);
+}
+function _draftConfirmEsc(e) { if (e.key === 'Escape') closeDraftConfirm(); }
+
 // ── 이어서 작성한 Draft 의 첨부 인계 ──────────────────────────────────
 // Draft 저장 시 파일은 ACC-Voucher-Draft_AttachedFiles 에 이미 올라가 있다.
 // 상신할 때 이 파일들을 상신 폴더로 복사하고, 링크를 새 전표에 물려준다.
@@ -7994,14 +8029,26 @@ function ptApply(){
     <div class="lx-foot" id="lx-foot"></div>
   </div>
 </div>
+<!-- Draft Submit 확인 — 결재가 올라가지 않는다는 점을 분명히 알린다 -->
+<div id="draft-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2100;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:460px;overflow:hidden;box-shadow:0 12px 44px rgba(0,0,0,.26)">
+    <div style="padding:22px 26px 0;text-align:center">
+      <div style="width:46px;height:46px;margin:0 auto 12px;border-radius:50%;background:#eaf6ea;display:flex;align-items:center;justify-content:center;font-size:1.35rem">📝</div>
+      <div style="font-size:1.02rem;font-weight:700;color:#1e293b">임시저장 하시겠습니까?</div>
+      <div style="font-size:.8rem;color:#64748b;margin-top:6px;line-height:1.6">결재는 올라가지 않습니다. 작성 중인 내용만 보관합니다.</div>
+    </div>
+    <div style="margin:16px 26px 0;padding:12px 14px;background:#f8fafc;border:1px solid #e6ebf1;border-radius:8px;font-size:.76rem;color:#475569;line-height:1.75">
+      <div style="display:flex;gap:8px"><span style="color:#107c10;flex-shrink:0">•</span><span><b style="color:#1e293b">결재자에게 알림이 가지 않습니다.</b> 상신은 나중에 [Submit] 으로 하시면 됩니다.</span></div>
+      <div style="display:flex;gap:8px;margin-top:5px"><span style="color:#107c10;flex-shrink:0">•</span><span><b style="color:#1e293b">[내 전표 목록] 의 Draft</b> 에서 다시 열어 이어서 작성할 수 있습니다.</span></div>
+      <div style="display:flex;gap:8px;margin-top:5px"><span style="color:#107c10;flex-shrink:0">•</span><span>첨부파일도 함께 보관되며, 상신할 때 그대로 넘어갑니다.</span></div>
+      <div id="draft-confirm-warn" style="display:none;margin-top:9px;padding-top:9px;border-top:1px dashed #cbd5e1;color:#8a6116"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:18px 26px 20px">
+      <button onclick="closeDraftConfirm()" style="padding:9px 18px;border:1px solid #d2d0ce;border-radius:7px;background:#fff;color:#605e5c;font-size:.83rem;font-weight:600;cursor:pointer;font-family:inherit">취소</button>
+      <button id="draft-confirm-ok" style="padding:9px 22px;border:none;border-radius:7px;background:#107c10;color:#fff;font-size:.83rem;font-weight:700;cursor:pointer;font-family:inherit">임시저장</button>
+    </div>
+  </div>
+</div>
+
 </body>
-<!-- redeploy2 -->
-<!-- redeploy2 -->
-<!-- redeploy2 -->
-<!-- redeploy2 -->
-<!-- redeploy -->
-<!-- redeploy -->
 </html>
-<!-- redeploy retry 1783310254 -->
-<!-- redeploy retry2 1783310333 -->
-<!-- redeploy retry3 1783312362 -->
