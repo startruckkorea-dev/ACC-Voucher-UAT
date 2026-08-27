@@ -1804,6 +1804,9 @@ async function _ensureLogFolder(driveId, folderPath, t) {
   } catch(e) { console.warn('[Log] 폴더 생성 오류:', e.message); return false; }
 }
 function logAction(systemName, action, detail) {
+  // UAT 는 Logging_data 폴더에도 아무것도 남기지 않는다.
+  // 여기서 막으면 폴더 생성(_ensureLogFolder)과 파일 쓰기가 함께 걸린다.
+  if (IS_UAT) { console.warn('[UAT] 감사 로그 기록 생략 —', action); return; }
   (async () => {
     try {
       const driveId = await _getLogDriveId();
