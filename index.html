@@ -408,7 +408,10 @@ if (new URLSearchParams(location.search).get('openId')) {
 
 <div id="uat-bar" style="position:sticky;top:0;z-index:900;background:#a4262c;color:#fff;text-align:center;
   padding:6px 12px;font-size:12px;font-weight:700;letter-spacing:.3px;font-family:inherit">
-  UAT 테스트 환경 — 이 화면에서 작성한 전표는 실제 업무용이 아닙니다. 운영 시스템은 acc-voucher.startruckkorea.com 입니다.
+  UAT 테스트 환경 — 실제 업무용이 아닙니다. 운영 시스템은 acc-voucher.startruckkorea.com 입니다.
+  <span style="display:block;font-weight:500;opacity:.92;margin-top:2px">
+    상신·결재를 포함한 모든 작업이 데이터베이스에 기록되지 않으며, 이 환경에서 작업한 내용은 어디에도 저장되지 않습니다.
+  </span>
 </div>
 <div id="login-screen">
   <div class="login-card">
@@ -1577,7 +1580,23 @@ async function token() {
     throw e;
   }
 }
+// UAT 에서 운영 데이터가 오염되지 않도록, 전표(Requests)·결재선(Approvals) 목록에 대한
+// 쓰기 요청을 실제로 보내지 않는다. 조회(GET)는 그대로 통과시켜 화면은 정상 동작한다.
+// 차단된 요청은 성공한 것처럼 가짜 응답을 돌려주어, 상신·결재 흐름이 중간에 끊기지 않고
+// 끝까지 진행되는 모습을 그대로 확인할 수 있다.
+function _uatBlockedWrite(path, method) {
+  if (!IS_UAT || method === 'GET') return false;
+  const p = String(path || '');
+  return p.includes(LIST_REQUESTS) || p.includes(LIST_APPROVALS)
+      || p.includes('ACC-Voucher_AttachedFiles');
+}
+
 async function api(path,method='GET',body=null,_retry=0) {
+  if (_uatBlockedWrite(path, method)) {
+    console.warn(`[UAT] 저장 차단 — ${method} ${String(path).slice(0,90)}`);
+    // 호출부가 응답의 id 를 쓰는 경우가 있어 형태를 맞춘 가짜 값을 돌려준다.
+    return { id: 'uat-' + Date.now() + '-' + Math.random().toString(36).slice(2,8), fields: {} };
+  }
   const t=await token();
   const opts={method,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'}};
   if(body) opts.body=JSON.stringify(body);
@@ -3869,10 +3888,14 @@ async function saveVoucher(status) {
         for(const file of accFiles){
           try{
             const buf=await file.arrayBuffer();
-            const res=await fetch(
-              GRAPH+'/drives/'+drive.id+'/root:/ACC-Voucher_AttachedFiles/'+voucherId+'/'+encodeURIComponent(file.name)+':/content',
-              {method:'PUT',headers:{Authorization:'Bearer '+t,'Content-Type':file.type||'application/octet-stream'},body:buf}
-            );
+            // UAT 는 파일도 실제로 올리지 않는다. 업로드 성공과 같은 형태를 돌려주어
+            // 이후 링크 생성·전표 연결 단계가 끊기지 않고 그대로 진행되게 한다.
+            const res = IS_UAT
+              ? { ok:true, json: async () => ({ id:'uat-file-'+Date.now(), name:file.name }) }
+              : await fetch(
+                  GRAPH+'/drives/'+drive.id+'/root:/ACC-Voucher_AttachedFiles/'+voucherId+'/'+encodeURIComponent(file.name)+':/content',
+                  {method:'PUT',headers:{Authorization:'Bearer '+t,'Content-Type':file.type||'application/octet-stream'},body:buf}
+                );
             if(res.ok){
               const u=await res.json();
               const safeKey=btoa(unescape(encodeURIComponent(drive.id+'###'+u.id)));
