@@ -5886,16 +5886,30 @@ async function resumeDraft(spId) {
       extraBPs = Array.isArray(_bps) ? _bps : [];
     } catch(e) { extraBPs = []; console.warn('[Draft] 추가 BP 복원 실패:', e.message); }
     if (typeof renderExtraBPs === 'function') { try { renderExtraBPs(); } catch(e){} }
-    // ExchangeRate 는 'EUR:1234; USD:1300; ...' 한 필드에 묶여 저장된다.
+    // 환율은 임시저장 때 값이 아니라 오늘 값을 쓴다.
+    // 한 달 전 임시저장을 열면 그때 환율이 들어가는데, 그대로 상신하면
+    // 원화 환산액이 달라져 결재 단계가 잘못 지정된다.
+    // 상신일 기준이 맞으므로 resetForm 이 채워 둔 오늘 환율을 그대로 둔다.
+    // (참고용으로 임시저장 당시 환율은 아래에서 안내한다)
     const _rateMap = {};
     String(spText(f.ExchangeRate || '')).split(/[;,\n]/).forEach(seg => {
       const kv = seg.split(':');
       if (kv.length === 2) _rateMap[kv[0].trim().toUpperCase()] = kv[1].trim();
     });
     const _rateId = { EUR:'v-exrate', USD:'v-exrate-usd', SGD:'v-exrate-sgd', JPY:'v-exrate-jpy', CNY:'v-exrate-cny' };
+    // resetForm 이 환율칸을 비워 두므로 오늘 값을 다시 넣는다.
+    // (화면 로딩 때 받아 둔 _cachedRates 가 오늘 환율이다)
+    const _today = window._cachedRates || {};
+    const _rateDiff = [];
     Object.entries(_rateId).forEach(([cur, id]) => {
-      const val = parseFloat(_rateMap[cur]);
-      if (val > 0) set(id, val);
+      const el = document.getElementById(id);
+      if (!el) return;
+      const now = parseFloat(_today[cur]);
+      if (now > 0) { el.value = now; if (cur === 'EUR') el.dispatchEvent(new Event('input')); }
+      const old = parseFloat(_rateMap[cur]);
+      if (old > 0 && now > 0 && Math.abs(old - now) >= 0.01) {
+        _rateDiff.push(cur + '  ' + old.toLocaleString('ko-KR') + ' → ' + now.toLocaleString('ko-KR'));
+      }
     });
     const _pt = document.getElementById('v-purpose-title');
     if (_pt && typeof onPurposeTitleInput === 'function') { try { onPurposeTitleInput(); } catch(e){} }
@@ -5919,11 +5933,21 @@ async function resumeDraft(spId) {
       + '· Voucher Type → BP → 회계 라인 순으로 훑어보세요.\n'
       + '· 고칠 부분이 있으면 지금 수정합니다.\n'
       + '\n'
-      + '2단계  첨부파일\n'
-      + '· 임시저장에 붙인 파일은 이미 올라와 있습니다.\n'
+      + '2단계  환율\n'
+      + '· 오늘 환율로 새로 채워졌습니다. 임시저장 때 값이 아닙니다.\n'
+      + (_rateDiff.length
+          ? '· 바뀐 통화 : ' + _rateDiff.join(' / ') + '\n'
+          : '')
+      + '\n'
+      + '3단계  결재라인\n'
+      + '· 자동 지정 결재자는 오늘 기준으로 다시 채워집니다.\n'
+      + '· 직접 고르는 칸(TL · MC · 추가 결재자)은 비어 있으니 다시 선택하세요.\n'
+      + '\n'
+      + '4단계  첨부파일\n'
+      + '· 임시저장에 올린 첨부파일은 이미 올라와 있습니다.\n'
       + '· 빼려면 [제외], 더 붙이려면 첨부 영역을 누르세요.\n'
       + '\n'
-      + '3단계  상신\n'
+      + '5단계  상신\n'
       + '· 맨 아래 [Submit] 을 누르면 결재가 시작됩니다.\n'
       + '· 오늘 날짜로 새 전표 번호가 부여됩니다.\n'
       + '· 이 임시저장 건은 상신 후 정리됩니다.\n'
