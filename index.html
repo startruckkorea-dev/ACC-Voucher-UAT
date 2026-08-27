@@ -263,6 +263,10 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 .badge-대기잠김{background:#f1f5f9;color:#64748b;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .badge-승인완료{background:#dff6dd;color:#107c10;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .badge-반려{background:#fde7e9;color:#a4262c;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
+.badge-임시저장{background:#eef2f7;color:#475569;border:1px dashed #94a3b8;border-radius:10px;padding:1px 8px;font-size:.68rem;font-weight:600}
+.btn-draft{background:#fff;color:#475569;border:1px solid #94a3b8;border-radius:6px;padding:9px 20px;
+  font-size:.86rem;font-weight:700;cursor:pointer;font-family:inherit}
+.btn-draft:hover{background:#f1f5f9}
 .badge-철회{background:#f1f5f9;color:#64748b;border-radius:10px;padding:2px 8px;font-size:.68rem;font-weight:600}
 .list-empty { text-align: center; padding: 48px; color: #a19f9d; font-size: 14px; }
 
@@ -482,6 +486,7 @@ if (new URLSearchParams(location.search).get('openId')) {
         </select>
         <select id="f-status" onchange="renderList()">
           <option value="">전체 상태</option>
+          <option value="임시저장">임시저장</option>
           <option value="대기">대기</option>
           <option value="대기(잠김)">대기(잠김)</option>
           <option value="승인완료">승인완료</option>
@@ -777,6 +782,8 @@ if (new URLSearchParams(location.search).get('openId')) {
 
       <div class="btn-row">
         <button class="btn-secondary" onclick="resetForm()">Reset</button>
+        <button class="btn-draft" onclick="saveVoucher(DRAFT_STATUS)"
+          title="결재를 올리지 않고 저장만 합니다. 이 전표는 ACC Voucher 안에서만 보이며, 내 전표 목록에서 다시 불러올 수 있습니다.">Draft</button>
         <button class="btn-primary" onclick="saveVoucher('대기')">Submit</button>
       </div>
     </div>
@@ -805,6 +812,7 @@ if (new URLSearchParams(location.search).get('openId')) {
   <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
     <select id="admin-status" onchange="applyAdminFilters()" style="border:1px solid #d2d0ce;border-radius:4px;padding:6px 10px;font-size:.72rem;font-family:inherit">
       <option value="">전체 상태</option>
+      <option value="임시저장">임시저장</option>
       <option value="대기">대기</option>
       <option value="승인완료">승인완료</option>
       <option value="반려">반려</option>
@@ -1051,6 +1059,12 @@ window.addEventListener('unhandledrejection', function(e){
 // ── Constants ──
 const CLIENT_ID = '432976c2-b43a-492e-8213-ece505fa1f51';
 const TENANT_ID = '19cab1f5-21f4-44df-8ac6-96d6ca595203';
+// 임시저장(Draft). 결재선을 만들지 않고 Requests 에만 남긴다.
+// APS 는 결재행을 기준으로 화면을 만들므로 이 상태의 전표는 APS 에 나타나지 않는다.
+// 값이 한글인 이유: 나머지 상태(대기·승인완료·반려·철회)가 모두 한글이라
+// 정렬·필터·배지 클래스(badge-{상태})가 같은 규칙으로 동작하게 맞춘 것.
+const DRAFT_STATUS = '임시저장';
+
 const DEFAULT_LIST_REQUESTS  = '060b5c19-b1ed-40a3-9dbd-fae9a6648a57'; // VOL01 고정값 — 볼륨 설정 파일이 아직 없을 때의 최초 부트스트랩 기준
 const DEFAULT_LIST_APPROVALS = 'bf0412d9-6556-46d9-a165-149461a4f286';
 let LIST_REQUESTS  = DEFAULT_LIST_REQUESTS;  // 항상 "현재 작업 대상 볼륨"의 리스트를 가리키도록 매번 갱신됨
@@ -3791,6 +3805,7 @@ function onPurposeTitleInput(){
 }
 
 async function saveVoucher(status) {
+  const _isDraft = (status === DRAFT_STATUS);
   await loadVolumeConfig();
   applyCurrentVolume(); // 신규 전표는 항상 "현재 활성 볼륨"에 저장 — 직전에 다른 볼륨 전표를 조회/처리했더라도 여기서 다시 현재 볼륨으로 고정
   const type=document.getElementById('v-type').value;
@@ -3805,8 +3820,12 @@ async function saveVoucher(status) {
   if(!purposeTitle){alert('Purpose Title을 입력하세요.\n\n전표 목록에서 한눈에 구분할 수 있도록 한 줄로 요약해 주세요.');document.getElementById('v-purpose-title')?.focus();return;}
   if(purposeTitle.length>80){alert('Purpose Title은 80자를 넘을 수 없습니다. (현재 '+purposeTitle.length+'자)');document.getElementById('v-purpose-title')?.focus();return;}
   const purpose=document.getElementById('v-purpose').value.trim();
-  if(!purpose){alert('Purpose를 입력하세요.');return;}
-  if(!lines.length){alert('회계 라인을 1개 이상 추가하세요.');return;}
+  // Draft 는 작성 중 저장이므로 Purpose 와 라인은 비어 있어도 허용한다.
+  // (Voucher Type 과 Purpose Title 은 목록에서 구분해야 하므로 Draft 에서도 필수)
+  if(!_isDraft){
+    if(!purpose){alert('Purpose를 입력하세요.');return;}
+    if(!lines.length){alert('회계 라인을 1개 이상 추가하세요.');return;}
+  }
 
   // COST CENTER / PROFIT CENTER / SUB_PC — GL의 COA 등록 정보(H/I/J열 'O') 기준으로 활성화된 항목은 필수 입력
   if(status==='대기') {
@@ -4089,7 +4108,7 @@ async function saveVoucher(status) {
         spStep('appr','err', _made+' / '+approvers.length);
         console.error('[상신] 결재선 생성 실패:', ae && ae.message);
         await rollbackIncompleteVoucher(requestId, voucherId, _made, approvers.length);
-        if(btn){btn.disabled=false; btn.textContent='Submit';}
+        if(btn){btn.disabled=false; btn.textContent = _isDraft ? 'Draft' : 'Submit';}
         return;   // 완료 안내로 넘어가지 않는다
       }
       // 만들어진 행 수를 서버에서 다시 세어 확인한다. POST가 200을 받고도 반영되지 않는 경우를 잡는다.
@@ -4100,7 +4119,7 @@ async function saveVoucher(status) {
           spStep('appr','err', _cnt+' / '+approvers.length);
           console.error('[상신] 결재선 개수 불일치:', _cnt, '/', approvers.length);
           await rollbackIncompleteVoucher(requestId, voucherId, _cnt, approvers.length);
-          if(btn){btn.disabled=false; btn.textContent='Submit';}
+          if(btn){btn.disabled=false; btn.textContent = _isDraft ? 'Draft' : 'Submit';}
           return;
         }
         // 초과(중복)도 확인한다. 같은 차수가 두 줄이면 한 줄을 승인해도 나머지가 대기로 남아
@@ -4128,9 +4147,19 @@ async function saveVoucher(status) {
       spDone(true, _attWarn
         ? '⚠️ '+_attWarn.replace(/\n/g,'<br>')
         : '결재선이 정상적으로 생성되었습니다.');
+    } else if (_isDraft) {
+      showAccAlert('임시저장되었습니다.',
+        'Voucher ID: ' + voucherId + '\n\n'
+        + '결재는 올라가지 않았습니다. [내 전표 목록]에서 「이어서 작성」으로 다시 불러올 수 있습니다.', '📝');
     } else {
       showAccAlert('저장되었습니다.', 'Voucher ID: '+voucherId, '✅');
     }
+    // 이어서 작성한 임시저장 원본은 저장이 끝난 뒤 정리한다 (같은 내용이 두 건 남지 않도록)
+    if (_resumingDraftId && String(_resumingDraftId) !== String(requestId)) {
+      try { await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${_resumingDraftId}`, 'DELETE'); }
+      catch(de) { console.warn('[Draft] 원본 정리 실패(무시됨):', de.message); }
+    }
+    _resumingDraftId = null;
     resetForm(); await loadMyList(); switchTab('list');
   } catch(e) {
     console.error('saveVoucher error:', e);
@@ -4141,7 +4170,7 @@ async function saveVoucher(status) {
       + '목록에 없으면 다시 상신해 주세요.');
     else showAccAlert('오류가 발생했습니다.', e.message, '⚠️');
   } finally {
-    if(btn){btn.disabled=false; btn.textContent='Submit';}
+    if(btn){btn.disabled=false; btn.textContent = _isDraft ? 'Draft' : 'Submit';}
   }
 }
 
@@ -4702,8 +4731,8 @@ function renderApprovalQueue() {
     tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:#a19f9d">결재 대기 중인 전표가 없습니다.</td></tr>';
     return;
   }
-  const stMap={'대기':'badge-대기','대기(잠김)':'badge-대기잠김','승인완료':'badge-승인완료','반려':'badge-반려','철회':'badge-철회'};
-  const stLabel={'대기':'대기','대기(잠김)':'대기(잠김)','승인완료':'승인완료','반려':'반려','철회':'철회'};
+  const stMap={'임시저장':'badge-임시저장','대기':'badge-대기','대기(잠김)':'badge-대기잠김','승인완료':'badge-승인완료','반려':'badge-반려','철회':'badge-철회'};
+  const stLabel={'임시저장':'임시저장','대기':'대기','대기(잠김)':'대기(잠김)','승인완료':'승인완료','반려':'반려','철회':'철회'};
   const fmtK=n=>Math.round(n||0).toLocaleString('ko-KR');
   const fmtDate = s => {
     if(!s) return '-';
@@ -5465,8 +5494,81 @@ function renderList(){
     <td style="text-align:right;font-weight:700;color:#c0392b;font-size:.78rem">${fmtK(v.TotalCR_KRW)}</td>
     <td><span class="${stMap[v.Status]||'badge-대기'}">${stLabel[v.Status]||v.Status}</span></td>
     <td style="font-size:.78rem;color:#605e5c">${fmtDate(v.SubmittedDate)}</td>
-    <td onclick="event.stopPropagation()" style="text-align:center">${v.Status==='대기'?`<button onclick="confirmWithdraw('${v._spId}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 12px;font-size:.75rem;cursor:pointer;font-family:inherit;white-space:nowrap">Withdraw</button>`:''}</td>
+    <td onclick="event.stopPropagation()" style="text-align:center">${v.Status===DRAFT_STATUS?`<button onclick="resumeDraft('${v._spId}')" style="background:#0078d4;color:#fff;border:none;border-radius:4px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer;margin-right:4px">이어서 작성</button><button onclick="confirmDeleteDraft('${v._spId}')" style="background:#fff;color:#a4262c;border:1px solid #e6b3b7;border-radius:4px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer">삭제</button>`:v.Status==='대기'?`<button onclick="confirmWithdraw('${v._spId}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 12px;font-size:.75rem;cursor:pointer;font-family:inherit;white-space:nowrap">Withdraw</button>`:''}</td>
   </tr>`).join('');
+}
+
+// ── 임시저장(Draft) 이어서 작성 · 삭제 ──────────────────────────────────
+// Draft 는 Requests 에만 있고 결재선이 없으므로, 폼에 되돌려 담고 원본은 지운다.
+// 원본을 남기면 이어서 작성할 때마다 같은 전표가 목록에 쌓인다.
+let _resumingDraftId = null;
+
+async function resumeDraft(spId) {
+  try {
+    applyCurrentVolume();
+    const f = await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${spId}/fields`);
+    if ((f.Status || '').trim() !== DRAFT_STATUS) {
+      showAccAlert('이어서 작성할 수 없습니다', '임시저장 상태의 전표만 불러올 수 있습니다.', '⚠️');
+      return;
+    }
+    resetForm();
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    set('v-type', f.VoucherType);
+    if (typeof onTypeChange === 'function') { try { onTypeChange(); } catch(e){} }
+    set('v-inv-date', (f.InvoiceDate || '').slice(0,10));
+    set('v-bp-code', f.BPCode); set('v-bp-name', f.BPName);
+    set('v-bp-bizno', f.BPBizNo); set('v-bp-cat', f.BPCategory);
+    set('v-purpose-title', f.PurposeTitle); set('v-purpose', spText(f.Purpose || ''));
+    // ExchangeRate 는 'EUR:1234; USD:1300; ...' 한 필드에 묶여 저장된다.
+    const _rateMap = {};
+    String(spText(f.ExchangeRate || '')).split(/[;,\n]/).forEach(seg => {
+      const kv = seg.split(':');
+      if (kv.length === 2) _rateMap[kv[0].trim().toUpperCase()] = kv[1].trim();
+    });
+    const _rateId = { EUR:'v-exrate', USD:'v-exrate-usd', SGD:'v-exrate-sgd', JPY:'v-exrate-jpy', CNY:'v-exrate-cny' };
+    Object.entries(_rateId).forEach(([cur, id]) => {
+      const val = parseFloat(_rateMap[cur]);
+      if (val > 0) set(id, val);
+    });
+    const _pt = document.getElementById('v-purpose-title');
+    if (_pt && typeof onPurposeTitleInput === 'function') { try { onPurposeTitleInput(); } catch(e){} }
+    try {
+      const parsed = JSON.parse(spText(f.LinesJSON || '') || '[]');
+      lines = Array.isArray(parsed) ? parsed : [];
+    } catch(e) { lines = []; console.warn('[Draft] 라인 복원 실패:', e.message); }
+    if (typeof renderLines === 'function') renderLines();
+    if (typeof renderApproval === 'function') renderApproval();
+    _resumingDraftId = spId;
+    switchTab('new');
+    showAccAlert('불러왔습니다.',
+      (f.Title || '') + '\n\n이어서 작성한 뒤 Submit 하면 결재가 올라갑니다.\n'
+      + 'Draft 로 다시 저장하면 새 번호로 저장되고 이 임시저장 건은 정리됩니다.', '📝');
+  } catch(e) {
+    console.error('[Draft] 불러오기 실패:', e);
+    showAccAlert('불러오지 못했습니다.', e.message, '⚠️');
+  }
+}
+
+function confirmDeleteDraft(spId) {
+  if (!confirm('이 임시저장 전표를 삭제하시겠습니까?\n삭제 후에는 되돌릴 수 없습니다.')) return;
+  deleteDraft(spId);
+}
+async function deleteDraft(spId) {
+  try {
+    applyCurrentVolume();
+    const f = await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${spId}/fields`);
+    if ((f.Status || '').trim() !== DRAFT_STATUS) {
+      showAccAlert('삭제할 수 없습니다', '임시저장 상태의 전표만 삭제할 수 있습니다.', '⚠️');
+      return;
+    }
+    await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${spId}`, 'DELETE');
+    if (_resumingDraftId === String(spId)) _resumingDraftId = null;
+    showAccAlert('삭제되었습니다.', '임시저장 전표를 목록에서 지웠습니다.', '🗑️');
+    await loadMyList();
+  } catch(e) {
+    console.error('[Draft] 삭제 실패:', e);
+    showAccAlert('삭제하지 못했습니다.', e.message, '⚠️');
+  }
 }
 
 // ── Withdraw (철회) — GW와 동일 패턴: APR 전체 먼저 잠금 → REQ 철회 처리 (race condition 방지) ──
