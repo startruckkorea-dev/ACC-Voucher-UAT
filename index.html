@@ -5232,6 +5232,16 @@ const ACC_ROLE_KEYS = [
 let _accMyRoles = [];      // 이 사용자가 맡은 역할 이름
 let _accQuickView = '';    // '' | 'mine' | 'todo'
 
+// IT 담당자로 보고 있는가 (역할을 맡지 않았지만 ACC-Voucher_IT 에 등록된 경우)
+function _isItViewer() {
+  return _accMyRoles.length === 1 && _accMyRoles[0] === 'IT';
+}
+
+// 특정 역할의 담당자 이메일
+function accRoleEmail(key) {
+  return ((cfgVal(_sysConfig, key) || {}).email || '').trim().toLowerCase();
+}
+
 function accDetectMyRoles() {
   const me = (user?.email || user?.username || '').trim().toLowerCase();
   if (!me || !_sysConfig) return [];
