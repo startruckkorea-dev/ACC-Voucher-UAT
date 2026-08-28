@@ -5244,19 +5244,38 @@ function accDetectMyRoles() {
   return roles;
 }
 
-// 내가 지금 결재할 차례인 건
+// 지금 결재할 차례인 건 (IT 는 담당자 누구든 차례면 포함)
 function accIsMyTurn(v) {
+  const mine = accMyEmails();
+  return mine.length > 0 && mine.includes(v._curEmail || '');
+}
+
+// 이 화면에서 「나」로 볼 이메일 목록.
+// 일반 담당자는 본인 하나, IT 는 ACC 담당자 전원이다.
+// IT 는 문의를 받아 대신 확인하는 자리라, 담당자 전체의 전표를 볼 수 있어야 한다.
+// IT 담당자로 보고 있는가 (역할을 맡지 않았지만 ACC-Voucher_IT 에 등록된 경우)
+function _isItViewer() {
+  return _accMyRoles.length === 1 && _accMyRoles[0] === 'IT';
+}
+
+function accMyEmails() {
   const me = (user?.email || user?.username || '').trim().toLowerCase();
-  return !!me && (v._curEmail || '') === me;
+  if (_accMyRoles.length === 1 && _accMyRoles[0] === 'IT') {
+    const all = ACC_ROLE_KEYS
+      .map(([k]) => ((cfgVal(_sysConfig, k) || {}).email || '').trim().toLowerCase())
+      .filter(Boolean);
+    return [...new Set([me, ...all])].filter(Boolean);
+  }
+  return me ? [me] : [];
 }
 
 // 나와 관련된 전표인지 — 내가 올렸거나, 결재선에 내가 들어 있는 전부.
 // 처리할 것 · 이미 승인한 것 · 반려한 것을 한 번에 본다.
 function accIsRelated(v) {
-  const me = (user?.email || user?.username || '').trim().toLowerCase();
-  if (!me) return false;
-  if ((v.RequesterEmail || '').trim().toLowerCase() === me) return true;
-  return (v._line || []).some(a => (a.email || '') === me);
+  const mine = accMyEmails();
+  if (!mine.length) return false;
+  if (mine.includes((v.RequesterEmail || '').trim().toLowerCase())) return true;
+  return (v._line || []).some(a => mine.includes(a.email || ''));
 }
 
 // 정렬 우선순위 — 내가 처리할 차례가 맨 위, 그다음 진행 중, 끝난 건은 아래로.
@@ -5290,14 +5309,16 @@ function accRenderQuickBar() {
       '<span style="font-size:.72rem;color:#64748b;font-weight:600;white-space:nowrap">'
     + _accMyRoles.join(' · ') + '</span>'
     + '<span style="width:1px;height:18px;background:#e2e8f0"></span>'
-    + '<button onclick="accSetQuickView(\'mine\')" title="내가 올린 것 · 내가 결재할 것 · 이미 처리한 것을 모두 모아 봅니다."'
+    + '<button onclick="accSetQuickView(\'mine\')" title="' + (_isItViewer()
+        ? 'ACC 담당자(AP · AR · GL · Accounting Head · CFO) 전원의 전표를 모아 봅니다.'
+        : '내가 올린 것 · 내가 결재할 것 · 이미 처리한 것을 모두 모아 봅니다.') + '"'
       + ' style="display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:8px;cursor:pointer;font-family:inherit;'
       + 'font-size:.78rem;font-weight:700;white-space:nowrap;transition:all .12s;'
       + (on ? 'background:#0078d4;color:#fff;border:1px solid #0078d4;box-shadow:0 1px 4px rgba(0,120,212,.28)'
             : 'background:#fff;color:#0078d4;border:1px solid #0078d455')
       + '">'
       + '<span style="font-size:.9rem;line-height:1">☰</span>'
-      + 'My Vouchers'
+      + (_isItViewer() ? 'ACC Team' : 'My Vouchers')
       + '<span style="font-size:.85rem;font-weight:800">' + related.length + '</span>'
       + (todo ? '<span style="font-size:.66rem;font-weight:800;padding:1px 7px;border-radius:9px;'
                 + (on ? 'background:rgba(255,255,255,.25);color:#fff' : 'background:#fff4e5;color:#b45309')
