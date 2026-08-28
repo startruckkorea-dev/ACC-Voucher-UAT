@@ -868,8 +868,6 @@ if (new URLSearchParams(location.search).get('openId')) {
   </div>
   <!-- ACC 담당자 빠른 보기 — 설정 파일에 등록된 담당자에게만 보인다 -->
   <div id="acc-quick-bar" style="display:none;align-items:center;flex-wrap:wrap;gap:9px;margin-bottom:12px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px"></div>
-  <!-- 내 업무 현황 카드 — 빠른 보기를 켰을 때만 나온다 -->
-  <div id="acc-quick-cards" style="display:none;flex-direction:column;gap:8px;margin-bottom:14px"></div>
 
   <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
     <select id="admin-status" onchange="applyAdminFilters()" style="border:1px solid #d2d0ce;border-radius:4px;padding:6px 10px;font-size:.72rem;font-family:inherit">
@@ -5251,68 +5249,62 @@ function accIsMyTurn(v) {
   const me = (user?.email || user?.username || '').trim().toLowerCase();
   return !!me && (v._curEmail || '') === me;
 }
-// 내가 올린 건
-function accIsMine(v) {
+
+// 나와 관련된 전표인지 — 내가 올렸거나, 결재선에 내가 들어 있는 전부.
+// 처리할 것 · 이미 승인한 것 · 반려한 것을 한 번에 본다.
+function accIsRelated(v) {
   const me = (user?.email || user?.username || '').trim().toLowerCase();
-  return !!me && (v.RequesterEmail || '').trim().toLowerCase() === me;
+  if (!me) return false;
+  if ((v.RequesterEmail || '').trim().toLowerCase() === me) return true;
+  return (v._line || []).some(a => (a.email || '') === me);
+}
+
+// 정렬 우선순위 — 내가 처리할 차례가 맨 위, 그다음 진행 중, 끝난 건은 아래로.
+function accRelatedRank(v) {
+  if (accIsMyTurn(v)) return 0;
+  const st = (v.Status || '').trim();
+  if (st === '대기') return 1;
+  if (st === DRAFT_STATUS) return 2;
+  return 3;   // 승인완료 · 반려 · 철회
 }
 
 function accSetQuickView(mode) {
   _accQuickView = (_accQuickView === mode) ? '' : mode;
   applyAdminFilters();
   accRenderQuickBar();
-  accRenderCards();
 }
 
-// 빠른 보기를 켜면 표 대신 카드로 보여 준다.
-// 표는 가로로 넓어 제목·Purpose·진행도를 함께 보기 어렵다.
-function accRenderCards() {
-  const box   = document.getElementById('acc-quick-cards');
-  const table = document.getElementById('admin-table-wrap') || document.querySelector('#tab-admin table')?.parentElement;
-  if (!box) return;
-  if (!_accQuickView) {
-    box.style.display = 'none'; box.innerHTML = '';
-    if (table) table.style.display = '';
-    return;
-  }
-  const rows = adminListCache || [];
-  box.style.display = 'flex';
-  if (table) table.style.display = 'none';
-  box.innerHTML = rows.length
-    ? rows.map(accCardHtml).join('')
-    : '<div style="padding:26px;text-align:center;color:#94a3b8;font-size:.82rem;background:#fff;border:1px solid #e6ebf1;border-radius:8px">'
-      + (_accQuickView === 'todo' ? '결재하실 전표가 없습니다.' : '진행 중인 전표가 없습니다.') + '</div>';
-}
 
 function accRenderQuickBar() {
   const bar = document.getElementById('acc-quick-bar');
   if (!bar) return;
   if (!_accMyRoles.length) { bar.style.display = 'none'; return; }
 
-  const rows  = adminListRaw || [];
-  const todo  = rows.filter(v => !v._srcDraft && accIsMyTurn(v));
-  const mine  = rows.filter(v => !v._srcDraft && accIsMine(v)
-                  && !['승인완료','반려','철회'].includes((v.Status||'').trim()));
-  const btn = (mode, label, n, color) => {
-    const on = _accQuickView === mode;
-    return '<button onclick="accSetQuickView(\'' + mode + '\')" '
-      + 'style="display:inline-flex;align-items:center;gap:7px;padding:7px 15px;border-radius:8px;cursor:pointer;font-family:inherit;'
-      + 'font-size:.78rem;font-weight:700;white-space:nowrap;transition:all .12s;'
-      + (on ? 'background:'+color+';color:#fff;border:1px solid '+color+';box-shadow:0 1px 4px rgba(0,0,0,.15)'
-            : 'background:#fff;color:'+color+';border:1px solid '+color+'55')
-      + '">' + label
-      + '<span style="font-size:.85rem;font-weight:800;' + (on ? '' : 'color:'+color) + '">' + n + '</span>'
-      + '</button>';
-  };
+  const rows    = adminListRaw || [];
+  const related = rows.filter(accIsRelated);
+  const todo    = related.filter(accIsMyTurn).length;
+  const on      = _accQuickView === 'mine';
+
   bar.style.display = 'flex';
   bar.innerHTML =
       '<span style="font-size:.72rem;color:#64748b;font-weight:600;white-space:nowrap">'
     + _accMyRoles.join(' · ') + '</span>'
     + '<span style="width:1px;height:18px;background:#e2e8f0"></span>'
-    + btn('todo', 'Waiting on Me ', todo.length, '#b45309')
-    + btn('mine', 'My Submissions ', mine.length, '#0078d4')
-    + (_accQuickView
-        ? '<button onclick="accSetQuickView(\'\')" style="background:none;border:none;color:#64748b;font-size:.74rem;cursor:pointer;font-family:inherit;text-decoration:underline">All</button>'
+    + '<button onclick="accSetQuickView(\'mine\')" title="내가 올린 것 · 내가 결재할 것 · 이미 처리한 것을 모두 모아 봅니다."'
+      + ' style="display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:8px;cursor:pointer;font-family:inherit;'
+      + 'font-size:.78rem;font-weight:700;white-space:nowrap;transition:all .12s;'
+      + (on ? 'background:#0078d4;color:#fff;border:1px solid #0078d4;box-shadow:0 1px 4px rgba(0,120,212,.28)'
+            : 'background:#fff;color:#0078d4;border:1px solid #0078d455')
+      + '">'
+      + '<span style="font-size:.9rem;line-height:1">☰</span>'
+      + 'My Vouchers'
+      + '<span style="font-size:.85rem;font-weight:800">' + related.length + '</span>'
+      + (todo ? '<span style="font-size:.66rem;font-weight:800;padding:1px 7px;border-radius:9px;'
+                + (on ? 'background:rgba(255,255,255,.25);color:#fff' : 'background:#fff4e5;color:#b45309')
+                + '">처리 ' + todo + '</span>' : '')
+      + '</button>'
+    + (on
+        ? '<button onclick="accSetQuickView(\'\')" style="background:none;border:none;color:#64748b;font-size:.74rem;cursor:pointer;font-family:inherit;text-decoration:underline">전체 보기</button>'
         : '');
 }
 
@@ -5369,8 +5361,7 @@ async function loadAdminList() {
 
     _accMyRoles = accDetectMyRoles();
     accRenderQuickBar();
-    accRenderCards();
-
+  
     // 진행이 멈춘 전표 식별 — 전표는 '대기'인데 '대기' 결재 행이 하나도 없는 건.
     // 철회가 중간에 끊기면 생기며, 겉으로는 정상 대기처럼 보여 방치되기 쉽다.
     // 표식은 IT 담당자(config: ACC-Voucher_IT)에게만 보이므로, 대상이 아니면 조회 자체를 생략한다.
@@ -5408,19 +5399,24 @@ function applyAdminFilters() {
   adminListCache = adminListRaw.filter(v=>{
     const _isDraftRow = (v.Status||'').trim() === DRAFT_STATUS;
     if(_draftView.admin ? !_isDraftRow : _isDraftRow) return false;
-    // ACC 담당자 빠른 보기
-    if(_accQuickView === 'todo' && !accIsMyTurn(v)) return false;
-    if(_accQuickView === 'mine' && !(accIsMine(v)
-        && !['승인완료','반려','철회'].includes((v.Status||'').trim()))) return false;
+    // 나와 관련된 전표만 보기
+    if(_accQuickView === 'mine' && !accIsRelated(v)) return false;
     if(fs && v.Status!==fs) return false;
     if(ft && v.VoucherType!==ft) return false;
     if(fk && !(v.RequesterEmail||'').toLowerCase().includes(fk) && !(v.Title||'').toLowerCase().includes(fk) && !(v.BPName||'').toLowerCase().includes(fk)) return false;
     return true;
   });
+  // 내 전표 보기에서는 처리할 차례인 건을 맨 위로 올린다.
+  // 무엇부터 봐야 하는지 스크롤하지 않고 알 수 있다.
+  if (_accQuickView === 'mine') {
+    adminListCache.sort((a, b) => {
+      const r = accRelatedRank(a) - accRelatedRank(b);
+      return r || _byNewest(a, b);
+    });
+  }
   const countEl = document.getElementById('admin-count');
   if(countEl) countEl.textContent = '총 '+adminListCache.length+'건';
   renderAdminList();
-  if (typeof accRenderCards === 'function') accRenderCards();
 }
 
 const PAGE_SIZE = 20;
@@ -5771,100 +5767,7 @@ function renderB1ChangeLog(logJson) {
   if(listEl) listEl.scrollTop = listEl.scrollHeight; // 최신 기록(맨 아래)이 보이도록 자동 스크롤
 }
 
-// ── 내 업무 현황 (카드형) ──────────────────────────────────────────────
-// 담당자가 알고 싶은 건 셋이다. 무슨 전표인가 · 지금 누구에게 있는가 · 얼마나 걸렸는가.
-// 표는 가로로 넓어 이 셋을 한눈에 보기 어렵고, 진행 단계는 전표를 열어야 알 수 있었다.
-// 카드 한 장에 제목·Purpose·결재 진행도·대기 일수를 모아 훑기만 해도 판단되게 한다.
-function accCardHtml(v) {
-  const line  = v._line || [];
-  const total = v._totalStep || 0;
-  const done  = v._doneStep || 0;
-  const mine  = accIsMyTurn(v);
-  const days  = _daysSince(v.SubmittedDate);
 
-  // 결재 진행 막대 — 승인된 단계는 초록, 현재 차례는 주황, 남은 단계는 회색
-  const dots = line.map(a => {
-    const c = a.status === '승인' ? '#107c10'
-            : a.status === '반려' ? '#a4262c'
-            : a.status === '대기' ? (mine ? '#b45309' : '#f0a30a')
-            : '#e2e8f0';
-    const cur = a.status === '대기';
-    return '<span title="' + escHtmlAttr(a.order + '차 ' + (a.role||'') + ' ' + (a.name||'') + ' — ' + a.status) + '" '
-      + 'style="width:' + (cur ? '14px' : '9px') + ';height:9px;border-radius:5px;background:' + c + ';flex-shrink:0"></span>';
-  }).join('');
-
-  const urgent = days >= 3 && (v.Status||'').trim() === '대기';
-  return '<div onclick="openVoucherSP(\'' + v._spId + '\',\'admin\')" '
-    + 'style="background:#fff;border:1px solid ' + (mine ? '#f0c98a' : '#e6ebf1') + ';border-left:3px solid '
-    + (mine ? '#b45309' : '#cbd5e1') + ';border-radius:8px;padding:12px 14px;cursor:pointer;transition:box-shadow .12s" '
-    + 'onmouseover="this.style.boxShadow=\'0 2px 8px rgba(0,0,0,.09)\'" onmouseout="this.style.boxShadow=\'none\'">'
-
-    // 첫 줄 — 유형 · Voucher ID · 대기 일수
-    + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">'
-      + '<span class="type-badge t-' + (v.VoucherType||'') + '">' + (TYPE_LABEL[v.VoucherType] || v.VoucherType || '-') + '</span>'
-      + '<span style="font-size:.74rem;color:#0078d4;font-weight:600">' + escHtml(v.Title || '-') + '</span>'
-      + (mine ? '<span style="font-size:.65rem;font-weight:800;color:#b45309;background:#fff4e5;border-radius:10px;padding:1px 8px;letter-spacing:.2px">YOUR TURN</span>' : '')
-      + (urgent ? '<span style="font-size:.65rem;font-weight:700;color:#a4262c;background:#fde7e9;border-radius:10px;padding:1px 8px">' + days + 'd</span>' : '')
-    + '</div>'
-
-    // 둘째 줄 — Purpose Title (한 줄 요약)
-    + '<div style="font-size:.82rem;color:#1e293b;font-weight:600;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
-      + escHtml(spText(v.PurposeTitle || '') || '(제목 없음)') + '</div>'
-
-    // 셋째 줄 — Purpose 본문 앞부분
-    + '<div style="font-size:.73rem;color:#64748b;line-height:1.5;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">'
-      + escHtml(spText(v.Purpose || '')) + '</div>'
-
-    // 넷째 줄 — 진행 막대 + 현재 결재자 + 금액
-    + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-      + '<div style="display:flex;gap:2px;align-items:center">' + dots + '</div>'
-      + '<span style="font-size:.7rem;color:#94a3b8">' + done + '/' + total + '</span>'
-      + (v._curName
-          ? '<span style="font-size:.72rem;' + (mine ? 'color:#b45309;font-weight:700' : 'color:#475569') + '">'
-            + escHtml(v._curName) + (v._curRole ? ' <span style="color:#94a3b8">' + escHtml(v._curRole) + '</span>' : '') + '</span>'
-          : '')
-      + '<span style="margin-left:auto;font-size:.76rem;color:#0078d4;font-weight:700">'
-        + Number(v.TotalDR_KRW||0).toLocaleString('ko-KR') + '</span>'
-    + '</div>'
-    + '</div>';
-}
-
-// 상신일로부터 며칠 지났는지
-function _daysSince(d) {
-  if (!d) return 0;
-  const t = new Date(d).getTime();
-  if (isNaN(t)) return 0;
-  return Math.max(0, Math.floor((Date.now() - t) / 86400000));
-}
-
-// 목록에서 결재가 몇 차에 걸려 있는지 바로 보여 준다.
-// 전에는 전표를 열어야만 알 수 있어, 담당자가 상세를 여닫으며 확인해야 했다.
-// 내 차례인 건은 색으로 구분해 눈에 띄게 한다.
-function adminStepInfo(v) {
-  if ((v.Status||'').trim() !== '대기' || !v._totalStep) return '';
-  const mine = accIsMyTurn(v);
-  const line = v._line || [];
-  // 「1/6차 Chiseong Won」처럼 숫자와 이름을 붙여 놓으면 정보가 뭉쳐 읽기 어렵다.
-  // 진행 정도는 점으로, 지금 누구에게 있는지는 이름으로 나눠 보여 준다.
-  const dots = line.map(a => {
-    const c = a.status === '승인' ? '#107c10'
-            : a.status === '반려' ? '#a4262c'
-            : a.status === '대기' ? (mine ? '#b45309' : '#f0a30a')
-            : '#e2e8f0';
-    const cur = a.status === '대기';
-    return '<span title="' + escHtmlAttr(a.order + '차 ' + (a.role||'') + ' ' + (a.name||'') + ' — ' + a.status) + '"'
-      + ' style="display:inline-block;width:' + (cur ? '11px' : '6px') + ';height:6px;border-radius:3px;background:' + c + '"></span>';
-  }).join('<span style="display:inline-block;width:2px"></span>');
-
-  return '<div style="margin-top:4px;display:flex;align-items:center;gap:6px;font-size:.67rem;line-height:1.3">'
-    + '<span style="display:inline-flex;align-items:center">' + dots + '</span>'
-    + '<span style="color:#94a3b8">' + v._doneStep + '/' + v._totalStep + '</span>'
-    + (v._curName
-        ? '<span style="' + (mine ? 'color:#b45309;font-weight:700' : 'color:#64748b') + '">'
-          + escHtml(v._curName) + '</span>'
-        : '')
-    + '</div>';
-}
 
 function renderAdminList(){
   const body = document.getElementById('admin-body');
@@ -5912,7 +5815,7 @@ function renderAdminList(){
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem">${escHtml(spText(v.Purpose))||'-'}</td>
     <td style="text-align:right;font-weight:700;color:#0078d4;font-size:.78rem">${fmtK(v.TotalDR_KRW)}</td>
     <td style="text-align:right;font-weight:700;color:#c0392b;font-size:.78rem">${fmtK(v.TotalCR_KRW)}</td>
-    <td><span class="${stMap[v.Status]||'badge-대기'}">${stLabel[v.Status]||v.Status}</span>${stuckMark(v)}${adminStepInfo(v)}</td>
+    <td><span class="${stMap[v.Status]||'badge-대기'}">${stLabel[v.Status]||v.Status}</span>${stuckMark(v)}</td>
     <td style="font-size:.78rem;color:#605e5c">${fmtDate(v.SubmittedDate)}</td>
     <td style="font-size:.75rem;color:#323130">
       ${b1DocNo || '<span style="color:#a19f9d">-</span>'}
