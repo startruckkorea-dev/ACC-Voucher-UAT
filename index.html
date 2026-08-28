@@ -5281,7 +5281,7 @@ function accRenderCards() {
   box.innerHTML = rows.length
     ? rows.map(accCardHtml).join('')
     : '<div style="padding:26px;text-align:center;color:#94a3b8;font-size:.82rem;background:#fff;border:1px solid #e6ebf1;border-radius:8px">'
-      + (_accQuickView === 'todo' ? '지금 결재하실 전표가 없습니다.' : '진행 중인 전표가 없습니다.') + '</div>';
+      + (_accQuickView === 'todo' ? '결재하실 전표가 없습니다.' : '진행 중인 전표가 없습니다.') + '</div>';
 }
 
 function accRenderQuickBar() {
@@ -5309,10 +5309,10 @@ function accRenderQuickBar() {
       '<span style="font-size:.72rem;color:#64748b;font-weight:600;white-space:nowrap">'
     + _accMyRoles.join(' · ') + '</span>'
     + '<span style="width:1px;height:18px;background:#e2e8f0"></span>'
-    + btn('todo', '내 결재 차례 ', todo.length, '#b45309')
-    + btn('mine', '내가 올린 진행 건 ', mine.length, '#0078d4')
+    + btn('todo', 'Waiting on Me ', todo.length, '#b45309')
+    + btn('mine', 'My Submissions ', mine.length, '#0078d4')
     + (_accQuickView
-        ? '<button onclick="accSetQuickView(\'\')" style="background:none;border:none;color:#64748b;font-size:.74rem;cursor:pointer;font-family:inherit;text-decoration:underline">전체 보기</button>'
+        ? '<button onclick="accSetQuickView(\'\')" style="background:none;border:none;color:#64748b;font-size:.74rem;cursor:pointer;font-family:inherit;text-decoration:underline">All</button>'
         : '');
 }
 
@@ -5803,8 +5803,8 @@ function accCardHtml(v) {
     + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">'
       + '<span class="type-badge t-' + (v.VoucherType||'') + '">' + (TYPE_LABEL[v.VoucherType] || v.VoucherType || '-') + '</span>'
       + '<span style="font-size:.74rem;color:#0078d4;font-weight:600">' + escHtml(v.Title || '-') + '</span>'
-      + (mine ? '<span style="font-size:.66rem;font-weight:800;color:#b45309;background:#fff4e5;border-radius:10px;padding:1px 8px">내 차례</span>' : '')
-      + (urgent ? '<span style="font-size:.66rem;font-weight:700;color:#a4262c;background:#fde7e9;border-radius:10px;padding:1px 8px">' + days + '일 경과</span>' : '')
+      + (mine ? '<span style="font-size:.65rem;font-weight:800;color:#b45309;background:#fff4e5;border-radius:10px;padding:1px 8px;letter-spacing:.2px">YOUR TURN</span>' : '')
+      + (urgent ? '<span style="font-size:.65rem;font-weight:700;color:#a4262c;background:#fde7e9;border-radius:10px;padding:1px 8px">' + days + 'd</span>' : '')
     + '</div>'
 
     // 둘째 줄 — Purpose Title (한 줄 요약)
@@ -5818,7 +5818,7 @@ function accCardHtml(v) {
     // 넷째 줄 — 진행 막대 + 현재 결재자 + 금액
     + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
       + '<div style="display:flex;gap:2px;align-items:center">' + dots + '</div>'
-      + '<span style="font-size:.7rem;color:#64748b">' + done + '/' + total + '차</span>'
+      + '<span style="font-size:.7rem;color:#94a3b8">' + done + '/' + total + '</span>'
       + (v._curName
           ? '<span style="font-size:.72rem;' + (mine ? 'color:#b45309;font-weight:700' : 'color:#475569') + '">'
             + escHtml(v._curName) + (v._curRole ? ' <span style="color:#94a3b8">' + escHtml(v._curRole) + '</span>' : '') + '</span>'
@@ -5843,12 +5843,26 @@ function _daysSince(d) {
 function adminStepInfo(v) {
   if ((v.Status||'').trim() !== '대기' || !v._totalStep) return '';
   const mine = accIsMyTurn(v);
-  const who  = v._curName || v._curRole || '';
-  return '<div style="margin-top:3px;font-size:.66rem;line-height:1.4;'
-    + (mine ? 'color:#b45309;font-weight:700' : 'color:#94a3b8') + '">'
-    + (mine ? '▶ 내 차례 · ' : '')
-    + v._curStep + '/' + v._totalStep + '차'
-    + (who ? ' <span style="color:#94a3b8">' + escHtml(who) + '</span>' : '')
+  const line = v._line || [];
+  // 「1/6차 Chiseong Won」처럼 숫자와 이름을 붙여 놓으면 정보가 뭉쳐 읽기 어렵다.
+  // 진행 정도는 점으로, 지금 누구에게 있는지는 이름으로 나눠 보여 준다.
+  const dots = line.map(a => {
+    const c = a.status === '승인' ? '#107c10'
+            : a.status === '반려' ? '#a4262c'
+            : a.status === '대기' ? (mine ? '#b45309' : '#f0a30a')
+            : '#e2e8f0';
+    const cur = a.status === '대기';
+    return '<span title="' + escHtmlAttr(a.order + '차 ' + (a.role||'') + ' ' + (a.name||'') + ' — ' + a.status) + '"'
+      + ' style="display:inline-block;width:' + (cur ? '11px' : '6px') + ';height:6px;border-radius:3px;background:' + c + '"></span>';
+  }).join('<span style="display:inline-block;width:2px"></span>');
+
+  return '<div style="margin-top:4px;display:flex;align-items:center;gap:6px;font-size:.67rem;line-height:1.3">'
+    + '<span style="display:inline-flex;align-items:center">' + dots + '</span>'
+    + '<span style="color:#94a3b8">' + v._doneStep + '/' + v._totalStep + '</span>'
+    + (v._curName
+        ? '<span style="' + (mine ? 'color:#b45309;font-weight:700' : 'color:#64748b') + '">'
+          + escHtml(v._curName) + '</span>'
+        : '')
     + '</div>';
 }
 
