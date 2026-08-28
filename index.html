@@ -437,6 +437,10 @@ table.pt-tbl tfoot td{background:#eef1f5;font-weight:700;border-top:2px solid #1
 .tab-btn:hover:not(.active) { background: #f3f2f1; }
 .badge{display:none;background:#a4262c;color:#fff;border-radius:10px;padding:1px 6px;font-size:.65rem;margin-left:5px;font-weight:700}
 
+@keyframes accSpin { to { transform: rotate(360deg); } }
+#admin-refresh-ico.spin { animation: accSpin .8s linear infinite; }
+#admin-refresh:hover { background:#f3f2f1; }
+#admin-refresh:disabled { opacity:.6; cursor:default; }
 .list-table{width:100%;border-collapse:collapse;font-size:.82rem;min-width:800px}
 .list-table tbody tr[onclick]{cursor:pointer}
 .list-table tbody tr[onclick]:hover{background:#f0f6ff}
@@ -895,6 +899,10 @@ if (new URLSearchParams(location.search).get('openId')) {
     </button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
       <span style="font-size:.82rem;color:#605e5c;font-weight:500" id="admin-count"></span>
+      <button id="admin-refresh" onclick="accReloadAdmin()" title="목록을 다시 불러옵니다. 지금 고른 담당자·필터는 그대로 유지됩니다."
+        style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:#fff;color:#605e5c;border:1px solid #d2d0ce;border-radius:4px;font-size:.8rem;cursor:pointer;white-space:nowrap;font-family:inherit">
+        <span id="admin-refresh-ico" style="display:inline-block;font-size:.86rem;line-height:1">↻</span>새로고침
+      </button>
       <button onclick="exportAdminExcel()" style="padding:6px 14px;background:#107c10;color:#fff;border:none;border-radius:4px;font-size:.82rem;cursor:pointer;white-space:nowrap">📊 Excel 내보내기</button>
     </div>
   </div>
@@ -5282,7 +5290,7 @@ function accRelatedRank(v) {
 }
 
 // _accQuickView 에는 「어느 담당자 기준으로 볼지」의 이메일이 들어간다. 빈 값이면 전체.
-function accSetQuickView(email) {
+async function accSetQuickView(email) {
   const me = (user?.email || user?.username || '').trim().toLowerCase();
   // 칩은 다섯 역할 모두 보이지만, 열어 볼 수 있는 건 본인 것뿐이다.
   // 이미 관리자 탭에 들어온 사람이라 「권한 없음」은 맞지 않다.
@@ -5301,10 +5309,37 @@ function accSetQuickView(email) {
     return;
   }
   _accQuickView = (_accQuickView === email) ? '' : email;
-  applyAdminFilters();
-  accRenderQuickBar();
+  // 누를 때마다 서버에서 다시 읽는다. 캐시만 다시 거르면 방금 결재된 건이 반영되지 않는다.
+  await accReloadAdmin();
 }
 
+
+// 목록을 다시 읽고 화면을 갱신한다. 진행 중에는 버튼과 칩을 잠가 연타를 막는다.
+let _accReloading = false;
+async function accReloadAdmin() {
+  if (_accReloading) return;
+  _accReloading = true;
+  const bar = document.getElementById('acc-quick-bar');
+  const btn = document.getElementById('admin-refresh');
+  const ico = document.getElementById('admin-refresh-ico');
+  if (bar) { bar.style.opacity = '.55'; bar.style.pointerEvents = 'none'; }
+  if (btn) btn.disabled = true;
+  if (ico) ico.classList.add('spin');
+  try {
+    await loadAdminList();
+  } catch(e) {
+    console.warn('[관리자] 새로고침 실패:', e && e.message);
+    applyAdminFilters();
+  } finally {
+    _accReloading = false;
+    const b2 = document.getElementById('acc-quick-bar');
+    const t2 = document.getElementById('admin-refresh');
+    const i2 = document.getElementById('admin-refresh-ico');
+    if (b2) { b2.style.opacity = ''; b2.style.pointerEvents = ''; }
+    if (t2) t2.disabled = false;
+    if (i2) i2.classList.remove('spin');
+  }
+}
 
 function accRenderQuickBar() {
   const bar = document.getElementById('acc-quick-bar');
@@ -5374,9 +5409,14 @@ async function loadAdminList() {
   refreshVolStatusBar();
   try {
     // 운영 전표와 임시저장을 함께 읽는다. 임시저장 조회가 실패해도 운영 목록은 보이게 한다.
+    // 목록 화면에 필요한 필드만 받는다. 회계 라인(LinesJSON)처럼 목록에서 쓰지 않는
+    // 큰 값이 빠져 응답이 크게 줄어든다. 상세보기와 Excel 은 각자 다시 조회한다.
+    const REQ_FIELDS = 'Title,VoucherType,Status,RequesterEmail,BPName,PurposeTitle,'
+                     + 'Purpose,TotalDR_KRW,TotalCR_KRW,SubmittedDate,B1DocNo';
+    const _req = `?expand=fields(select=${REQ_FIELDS})&$top=999`;
     const [data, draftData] = await Promise.all([
-      apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`),
-      apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_DRAFTS}/items?$expand=fields&$top=999`)
+      apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items` + _req),
+      apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_DRAFTS}/items` + _req)
         .catch(e => { console.warn('[Draft] 임시저장 조회 실패:', e.message); return {value:[]}; }),
     ]);
     adminListRaw = [
@@ -5390,7 +5430,9 @@ async function loadAdminList() {
     try {
       const _aprByReq = {};
       await _forEachAprVolume(async (vol) => {
-        const d = await apiAll(`${GRAPH}/sites/${siteId}/lists/${vol.id}/items?$expand=fields&$top=999`);
+        const APR_FIELDS = 'RequestID,ApprovalOrder,ApproverRole,ApproverName,ApproverEmail,Status';
+        const d = await apiAll(`${GRAPH}/sites/${siteId}/lists/${vol.id}/items`
+                               + `?expand=fields(select=${APR_FIELDS})&$top=999`);
         d.value.forEach(i => {
           const f2 = i.fields, rid = String(f2.RequestID);
           (_aprByReq[rid] = _aprByReq[rid] || []).push({
@@ -6374,6 +6416,9 @@ async function openVoucherSP(spId, fromTab){
   let v = voucherListCache.find(x=>x._spId===spId)
     || adminListCache.find(x=>x._spId===spId)
     || (approvalQueueCache.find(x=>x._voucher?._spId===spId)?._voucher);
+  // 목록은 화면에 필요한 필드만 받는다(조회 속도 때문).
+  // 회계 라인·환율·첨부 링크가 빠져 있어 그대로 상세를 그리면 「라인 없음」이 된다.
+  if(v && v.LinesJSON === undefined) v = null;
   if(!v){
     // 캐시에 없으면(예: URL로 바로 진입) SharePoint에서 직접 조회
     try{
