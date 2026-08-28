@@ -5990,35 +5990,40 @@ async function resumeDraft(spId) {
       if (typeof onAccLineChange === 'function') onAccLineChange();
     }
 
-    if (typeof renderApproval === 'function') renderApproval();
-
-    // 결재선 복원 — 임시저장 당시 결재선을 그대로 되살린다.
-    // renderApproval 이 칸을 그린 뒤에 값을 넣어야 한다(먼저 넣으면 다시 지워진다).
-    let _apLineSaved = [];
+    // ── 결재선 복원 ─────────────────────────────────────────────────
+    // 임시저장 당시 결재선을 그대로 되살린다(자동 지정 · 직접 선택 · 추가 결재자).
+    // 순서가 중요하다.
+    //   ① 자동 지정 오버라이드와 추가 결재자를 먼저 세운다
+    //   ② renderApproval 로 한 번에 그린다 (오버라이드가 화면에 반영된다)
+    //   ③ 그려진 뒤에 직접 선택 칸의 값을 넣는다 (먼저 넣으면 렌더가 지운다)
     try {
       const _ap = JSON.parse(spText(f.ApprovalDraftJSON || '') || '{}');
-      _apLineSaved = _ap.line || [];
-      // 추가 결재자를 먼저 넣고 한 번 더 그린다. 그래야 칸 수가 맞는다.
+
+      // ① 자동 지정 결재자는 화면 입력칸이 아니라 buildApprovers 가 설정 파일에서
+      //    직접 읽는다. DOM 에 값을 넣어도 반영되지 않으므로 전역 오버라이드에 담는다.
+      _draftFixedOverride = {};
+      (_ap.line || []).forEach(a => {
+        if (a.role && a.email) _draftFixedOverride[a.role] = { name:a.name||'', email:a.email };
+      });
       (_ap.extra || []).forEach(x => {
         extraApprovers.push({ uid:'ex'+(++_exSeq), after:x.after, dept:x.dept||'',
                               team:x.team||'', name:x.name||'', email:x.email||'' });
       });
-      if ((_ap.extra || []).length && typeof renderApproval === 'function') renderApproval();
-      // 직접 고른 칸(TL·MC 등)
+
+      // ②
+      if (typeof renderApproval === 'function') renderApproval();
+
+      // ③ 직접 고른 칸(TL·MC 등)
       (_ap.manual || []).forEach(m2 => {
         const nEl = document.getElementById('ga'+m2.n+'-name');
         const eEl = document.getElementById('ga'+m2.n+'-email');
         if (nEl && m2.name)  nEl.value  = m2.name;
         if (eEl && m2.email) eEl.value = m2.email;
       });
-      // 자동 지정 결재자(CFO·RD·Accounting Head 등)는 화면 입력칸이 아니라
-      // buildApprovers 가 설정 파일에서 직접 읽는다. DOM 에 값을 넣어도 반영되지 않는다.
-      // 그래서 전역 오버라이드에 담아 두고 buildApprovers 가 이를 우선 쓰게 한다.
-      _draftFixedOverride = {};
-      (_apLineSaved || []).forEach(a => {
-        if (a.role && a.email) _draftFixedOverride[a.role] = { name:a.name||'', email:a.email };
-      });
-    } catch(e) { console.warn('[Draft] 결재선 복원 실패:', e.message); }
+    } catch(e) {
+      console.warn('[Draft] 결재선 복원 실패:', e.message);
+      if (typeof renderApproval === 'function') renderApproval();   // 최소한 화면은 그린다
+    }
     _resumingDraftId = spId;
     // Draft 에 붙여둔 첨부는 이미 올라가 있다. 다시 붙이라고 하면 사용자가 파일을 찾아야 하므로
     // 링크를 그대로 이어받아 상신 시 상신 폴더로 옮겨 담는다.
