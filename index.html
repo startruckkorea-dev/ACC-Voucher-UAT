@@ -866,6 +866,9 @@ if (new URLSearchParams(location.search).get('openId')) {
     <button id="btn-vol-manage" onclick="openVolumeModal()" title="Approvals 리스트 세대를 추가하거나 전환합니다"
       style="padding:3px 10px;background:#fff;color:#605e5c;border:1px solid #d2d0ce;border-radius:4px;font-size:.72rem;cursor:pointer;white-space:nowrap;font-family:inherit">세대 관리</button>
   </div>
+  <!-- ACC 담당자 빠른 보기 — 설정 파일에 등록된 담당자에게만 보인다 -->
+  <div id="acc-quick-bar" style="display:none;align-items:center;flex-wrap:wrap;gap:9px;margin-bottom:12px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px"></div>
+
   <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
     <select id="admin-status" onchange="applyAdminFilters()" style="border:1px solid #d2d0ce;border-radius:4px;padding:6px 10px;font-size:.72rem;font-family:inherit">
       <option value="">전체 상태</option>
@@ -1761,6 +1764,20 @@ function _uatMatchFilter(fields, path) {
 }
 
 // api()/apiAll() 이 두 목록을 향할 때 대신 응답한다. 대상이 아니면 null 을 돌려준다.
+// 목록 조회 결과에 이 세션에서 만든 샌드박스 항목을 덧붙인다.
+// UAT 도 운영과 같은 목록을 보되(내 전표·결재함·관리자 탭), 방금 만든 테스트 전표도 함께 보이게 한다.
+function uatMergeList(path, real) {
+  if (!IS_UAT) return real;
+  const listId = _uatListIdOf(path);
+  if (!listId) return real;
+  const bucket = (_uatDB.items || {})[_uatRoleOf(listId)] || {};
+  const mine = Object.values(bucket)
+    .filter(r => _uatMatchFilter(r.fields, path))
+    .map(r => JSON.parse(JSON.stringify(r)));
+  if (!mine.length) return real;
+  return { ...real, value: [...mine, ...(real.value || [])] };
+}
+
 function uatHandle(path, method, body) {
   if (!IS_UAT) return null;
   // 첨부 라이브러리는 업로드도 조회도 하지 않는다. 빈 폴더처럼 응답한다.
@@ -1800,18 +1817,16 @@ function uatHandle(path, method, body) {
   }
   if (method === 'DELETE' && itemId) { delete bucket[itemId]; _uatSaveDB(); return null; }
 
-  // GET
+  // GET — 단건은 샌드박스에 있을 때만 가로챈다.
+  // 목록은 가로채지 않는다. 실제 데이터를 받은 뒤 uatMergeList 가 샌드박스 항목을 덧붙인다.
   if (itemId) {
     const rec = bucket[itemId];
-    if (!rec) { const e = new Error('itemNotFound'); e.uatNotFound = true; throw e; }
+    if (!rec) return null;   // 운영 항목이므로 실제 조회로 넘긴다
     return p.includes('/fields')
       ? JSON.parse(JSON.stringify(rec.fields))
       : JSON.parse(JSON.stringify(rec));
   }
-  const rows = Object.values(bucket)
-    .filter(r => _uatMatchFilter(r.fields, p))
-    .map(r => JSON.parse(JSON.stringify(r)));
-  return { value: rows };
+  return null;
 }
 
 async function api(path,method='GET',body=null,_retry=0) {
@@ -1852,11 +1867,6 @@ async function api(path,method='GET',body=null,_retry=0) {
 
 // ── 페이지네이션 전체 조회 헬퍼 (GW/BP-Master 동일 패턴, nextLink 자동순회) ──
 async function apiAll(path) {
-  // UAT: 두 목록 조회는 샌드박스에서 바로 돌려준다 (페이지네이션 불필요).
-  if (IS_UAT) {
-    const r = uatHandle(path, 'GET', null);
-    if (r !== null) return r;
-  }
   let items = [], url = path;
   while(url) {
     // 페이지 단위로 재시도한다. 재시도가 없으면 스로틀 한 번에 조회 전체가 실패하고,
@@ -1880,7 +1890,8 @@ async function apiAll(path) {
     items = items.concat(d.value || []);
     url = d['@odata.nextLink'] || null;
   }
-  return {value: items};
+  // UAT: 실제 목록에 이 세션의 샌드박스 항목을 덧붙인다.
+  return uatMergeList(path, {value: items});
 }
 
 // ══ 감사 로깅 (Excel 내보내기 등) — STK-DB "Logging_data" 폴더에 시스템/날짜별로 개별 JSON 파일 기록 ══
@@ -5206,6 +5217,78 @@ async function switchAprVolume(code) {
 }
 
 let adminListRaw = [];
+// ── ACC 담당자 전용 빠른 보기 ──────────────────────────────────────────
+// AP·AR·GL·Accounting Head·CFO 담당자는 「내가 결재할 차례인 건」과
+// 「내가 올린 건」을 따로 보려고 관리자 탭을 계속 새로고침하고,
+// 몇 차에서 멈췄는지 보려고 전표를 하나씩 열어야 했다.
+// 설정 파일에 등록된 담당자에게만 요약 바를 띄우고, 한 번 눌러 걸러 보게 한다.
+const ACC_ROLE_KEYS = [
+  ['ACC-Voucher_AP',         'AP 담당'],
+  ['ACC-Voucher_AR',         'AR 담당'],
+  ['ACC-Voucher_GL',         'GL 담당'],
+  ['ACC-Voucher_ACCOUNTING', 'Accounting Head'],
+  ['ACC-Voucher_CFO',        'CFO'],
+];
+let _accMyRoles = [];      // 이 사용자가 맡은 역할 이름
+let _accQuickView = '';    // '' | 'mine' | 'todo'
+
+function accDetectMyRoles() {
+  const me = (user?.email || user?.username || '').trim().toLowerCase();
+  if (!me || !_sysConfig) return [];
+  return ACC_ROLE_KEYS
+    .filter(([k]) => ((cfgVal(_sysConfig, k) || {}).email || '').trim().toLowerCase() === me)
+    .map(([, label]) => label);
+}
+
+// 내가 지금 결재할 차례인 건
+function accIsMyTurn(v) {
+  const me = (user?.email || user?.username || '').trim().toLowerCase();
+  return !!me && (v._curEmail || '') === me;
+}
+// 내가 올린 건
+function accIsMine(v) {
+  const me = (user?.email || user?.username || '').trim().toLowerCase();
+  return !!me && (v.RequesterEmail || '').trim().toLowerCase() === me;
+}
+
+function accSetQuickView(mode) {
+  _accQuickView = (_accQuickView === mode) ? '' : mode;
+  applyAdminFilters();
+  accRenderQuickBar();
+}
+
+function accRenderQuickBar() {
+  const bar = document.getElementById('acc-quick-bar');
+  if (!bar) return;
+  if (!_accMyRoles.length) { bar.style.display = 'none'; return; }
+
+  const rows  = adminListRaw || [];
+  const todo  = rows.filter(v => !v._srcDraft && accIsMyTurn(v));
+  const mine  = rows.filter(v => !v._srcDraft && accIsMine(v)
+                  && !['승인완료','반려','철회'].includes((v.Status||'').trim()));
+  const btn = (mode, label, n, color) => {
+    const on = _accQuickView === mode;
+    return '<button onclick="accSetQuickView(\'' + mode + '\')" '
+      + 'style="display:inline-flex;align-items:center;gap:7px;padding:7px 15px;border-radius:8px;cursor:pointer;font-family:inherit;'
+      + 'font-size:.78rem;font-weight:700;white-space:nowrap;transition:all .12s;'
+      + (on ? 'background:'+color+';color:#fff;border:1px solid '+color+';box-shadow:0 1px 4px rgba(0,0,0,.15)'
+            : 'background:#fff;color:'+color+';border:1px solid '+color+'55')
+      + '">' + label
+      + '<span style="font-size:.85rem;font-weight:800;' + (on ? '' : 'color:'+color) + '">' + n + '</span>'
+      + '</button>';
+  };
+  bar.style.display = 'flex';
+  bar.innerHTML =
+      '<span style="font-size:.72rem;color:#64748b;font-weight:600;white-space:nowrap">'
+    + _accMyRoles.join(' · ') + '</span>'
+    + '<span style="width:1px;height:18px;background:#e2e8f0"></span>'
+    + btn('todo', '내 결재 차례 ', todo.length, '#b45309')
+    + btn('mine', '내가 올린 진행 건 ', mine.length, '#0078d4')
+    + (_accQuickView
+        ? '<button onclick="accSetQuickView(\'\')" style="background:none;border:none;color:#64748b;font-size:.74rem;cursor:pointer;font-family:inherit;text-decoration:underline">전체 보기</button>'
+        : '');
+}
+
 async function loadAdminList() {
   _adminPgState.page = 0;
   const body = document.getElementById('admin-body');
@@ -5224,6 +5307,42 @@ async function loadAdminList() {
       ...data.value.map(item=>({_spId:item.id, _srcDraft:false, _created:item.createdDateTime||'', ...item.fields})),
       ...draftData.value.map(item=>({_spId:item.id, _srcDraft:true, _created:item.createdDateTime||'', ...item.fields})),
     ].sort(_byNewest);
+
+    // 각 전표의 결재 진행 상태를 함께 담는다.
+    // 지금은 몇 차에 걸려 있는지 보려면 전표를 하나씩 열어야 해서,
+    // 담당자가 상세를 여닫으며 확인하는 수고가 컸다.
+    try {
+      const _aprByReq = {};
+      await _forEachAprVolume(async (vol) => {
+        const d = await apiAll(`${GRAPH}/sites/${siteId}/lists/${vol.id}/items?$expand=fields&$top=999`);
+        d.value.forEach(i => {
+          const f2 = i.fields, rid = String(f2.RequestID);
+          (_aprByReq[rid] = _aprByReq[rid] || []).push({
+            order : f2.ApprovalOrder || 0,
+            role  : f2.ApproverRole || '',
+            name  : f2.ApproverName || '',
+            email : (f2.ApproverEmail || '').toLowerCase(),
+            status: ((f2.Status && f2.Status.Value) ? f2.Status.Value : f2.Status || '').trim(),
+          });
+        });
+        return [];
+      });
+      adminListRaw.forEach(v => {
+        const line = (_aprByReq[String(v._spId)] || []).sort((a,b)=>a.order-b.order);
+        v._line     = line;
+        const cur   = line.find(a => a.status === '대기');
+        v._curStep  = cur ? cur.order : 0;
+        v._curRole  = cur ? cur.role  : '';
+        v._curName  = cur ? cur.name  : '';
+        v._curEmail = cur ? cur.email : '';
+        v._totalStep = line.length;
+        v._doneStep  = line.filter(a => a.status === '승인').length;
+      });
+    } catch(e) { console.warn('[관리자] 결재 진행 정보 조회 실패:', e && e.message); }
+
+    _accMyRoles = accDetectMyRoles();
+    accRenderQuickBar();
+
     // 진행이 멈춘 전표 식별 — 전표는 '대기'인데 '대기' 결재 행이 하나도 없는 건.
     // 철회가 중간에 끊기면 생기며, 겉으로는 정상 대기처럼 보여 방치되기 쉽다.
     // 표식은 IT 담당자(config: ACC-Voucher_IT)에게만 보이므로, 대상이 아니면 조회 자체를 생략한다.
@@ -5261,6 +5380,10 @@ function applyAdminFilters() {
   adminListCache = adminListRaw.filter(v=>{
     const _isDraftRow = (v.Status||'').trim() === DRAFT_STATUS;
     if(_draftView.admin ? !_isDraftRow : _isDraftRow) return false;
+    // ACC 담당자 빠른 보기
+    if(_accQuickView === 'todo' && !accIsMyTurn(v)) return false;
+    if(_accQuickView === 'mine' && !(accIsMine(v)
+        && !['승인완료','반려','철회'].includes((v.Status||'').trim()))) return false;
     if(fs && v.Status!==fs) return false;
     if(ft && v.VoucherType!==ft) return false;
     if(fk && !(v.RequesterEmail||'').toLowerCase().includes(fk) && !(v.Title||'').toLowerCase().includes(fk) && !(v.BPName||'').toLowerCase().includes(fk)) return false;
@@ -5619,6 +5742,21 @@ function renderB1ChangeLog(logJson) {
   if(listEl) listEl.scrollTop = listEl.scrollHeight; // 최신 기록(맨 아래)이 보이도록 자동 스크롤
 }
 
+// 목록에서 결재가 몇 차에 걸려 있는지 바로 보여 준다.
+// 전에는 전표를 열어야만 알 수 있어, 담당자가 상세를 여닫으며 확인해야 했다.
+// 내 차례인 건은 색으로 구분해 눈에 띄게 한다.
+function adminStepInfo(v) {
+  if ((v.Status||'').trim() !== '대기' || !v._totalStep) return '';
+  const mine = accIsMyTurn(v);
+  const who  = v._curName || v._curRole || '';
+  return '<div style="margin-top:3px;font-size:.66rem;line-height:1.4;'
+    + (mine ? 'color:#b45309;font-weight:700' : 'color:#94a3b8') + '">'
+    + (mine ? '▶ 내 차례 · ' : '')
+    + v._curStep + '/' + v._totalStep + '차'
+    + (who ? ' <span style="color:#94a3b8">' + escHtml(who) + '</span>' : '')
+    + '</div>';
+}
+
 function renderAdminList(){
   const body = document.getElementById('admin-body');
   if(!adminListCache.length){
@@ -5665,7 +5803,7 @@ function renderAdminList(){
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem">${escHtml(spText(v.Purpose))||'-'}</td>
     <td style="text-align:right;font-weight:700;color:#0078d4;font-size:.78rem">${fmtK(v.TotalDR_KRW)}</td>
     <td style="text-align:right;font-weight:700;color:#c0392b;font-size:.78rem">${fmtK(v.TotalCR_KRW)}</td>
-    <td><span class="${stMap[v.Status]||'badge-대기'}">${stLabel[v.Status]||v.Status}</span>${stuckMark(v)}</td>
+    <td><span class="${stMap[v.Status]||'badge-대기'}">${stLabel[v.Status]||v.Status}</span>${stuckMark(v)}${adminStepInfo(v)}</td>
     <td style="font-size:.78rem;color:#605e5c">${fmtDate(v.SubmittedDate)}</td>
     <td style="font-size:.75rem;color:#323130">
       ${b1DocNo || '<span style="color:#a19f9d">-</span>'}
