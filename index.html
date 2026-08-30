@@ -100,9 +100,12 @@ html.standalone-detail.detail-ready #standalone-loader { display: none !importan
 /* ── Account Lines ── */
 .lines-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .lines-scroll { overflow-x: auto; }
+/* 회계 정보 표는 열이 많아 지정 폭을 무시하고 늘어나면 가로 스크롤이 생긴다.
+   지정한 열 폭대로 줄어들게 table-layout 을 고정한다. */
+table.lines { table-layout: fixed; width: 100%; }
 table.lines { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 900px; }
-table.lines th { background: #f3f2f1; padding: 7px 8px; text-align: left; border: 1px solid #edebe9; font-size: 11px; font-weight: 600; color: #605e5c; white-space: nowrap; }
-table.lines td { padding: 4px 6px; border: 1px solid #edebe9; vertical-align: middle; }
+table.lines th { background: #f3f2f1; padding: 6px 5px; text-align: left; border: 1px solid #edebe9; font-size: 10.5px; font-weight: 600; color: #605e5c; white-space: normal; line-height: 1.3; }
+table.lines td { padding: 4px 4px; border: 1px solid #edebe9; vertical-align: middle; }
 table.lines tr:hover td { background: #f0f6ff; }
 table.lines input, table.lines select { padding: 5px 6px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 3px; width: 100%; }
 table.lines input:focus, table.lines select:focus { outline: none; border-color: #0078d4; }
@@ -856,6 +859,7 @@ if (new URLSearchParams(location.search).get('openId')) {
         <div class="hint">📎 클릭하여 파일 첨부 (최대 20MB)</div>
       </div>
       <div class="file-list" id="acc-file-list"></div>
+      <div id="xls-layout-note" style="display:none;margin-top:8px;font-size:.72rem;color:#8a6116;background:#fdf6e3;border:1px solid #f0d9a0;border-radius:6px;padding:8px 12px;line-height:1.5"></div>
       <!-- 임시저장에서 이어받은 첨부 — 이미 업로드된 파일이라 다시 고를 필요가 없다 -->
       <div id="resumed-att" style="display:none;margin-top:8px;padding:10px 12px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:6px"></div>
 
@@ -2571,7 +2575,7 @@ function switchTab(tab) {
   });
   // 바우처 작성은 좁은 너비, 목록/결재함/관리자는 넓은 레이아웃 (GW 동일)
   const appEl = document.getElementById('app');
-  if(appEl) appEl.style.maxWidth = tab==='new' ? '960px' : '1280px';
+  if(appEl) appEl.style.maxWidth = tab==='new' ? '1040px' : '1280px';
   if(tab==='list') loadMyList();
   if(tab==='appr') loadApprovalQueue();
   if(tab==='admin') loadAdminList();
@@ -3900,8 +3904,50 @@ function onAccFileSelect(e) {
   renderAccFiles();
 }
 function removeAccFile(i){ accFiles.splice(i,1); renderAccFiles(); }
+const XLS_EXT = ['xlsx','xls','xlsm','xlsb','csv'];
+
+function updateXlsLayoutNote(){
+  const el = document.getElementById('xls-layout-note');
+  if(!el) return;
+  const hits = (accFiles||[]).filter(f =>
+    XLS_EXT.includes((f.name||'').split('.').pop().toLowerCase()));
+  if(!hits.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+
+  // 파일이 여러 개면 한 줄에 이어 붙이지 않고 번호를 매겨 나눈다.
+  // 이름이 길어 한 줄에 뭉치면 어느 파일인지 알아보기 어렵다.
+  const list = hits.length === 1
+    ? '<span style="color:#a37a1e;font-weight:600">' + escHtml(hits[0].name) + '</span>'
+    : hits.map((f, i) =>
+        '<div style="color:#a37a1e;font-weight:600">' + (i + 1) + '. ' + escHtml(f.name) + '</div>'
+      ).join('');
+
+  // 예전 문구는 「한 페이지에 맞추기」를 그냥 요구했다. 시트가 여럿이거나 행이 많으면
+  // 애초에 한 장에 들어가지 않아, 받는 쪽에서는 지킬 수 없는 안내였다.
+  // 지금은 「한 장에 못 넣어도 괜찮다」를 먼저 말하고, 그때 무엇을 맞추면 되는지를 적는다.
+  const tip = (t) =>
+    '<li style="margin-top:3px">' + t + '</li>';
+
+  el.innerHTML =
+      '<div style="font-weight:700;font-size:.75rem">📄 첨부하신 Excel의 인쇄 모양을 한 번만 봐주세요</div>'
+    + '<div style="margin-top:3px">결재자와 회계 담당자는 받은 파일을 그대로 열거나 인쇄해서 봅니다. '
+    + '저장하실 때의 모양이 그대로 전달됩니다.</div>'
+    + '<ul style="margin:6px 0 0;padding-left:16px;line-height:1.55">'
+    + tip('용지 방향은 <b>가로</b>, 인쇄 영역은 실제 내용 범위로 잡아 주세요.')
+    + tip('<b>한 장에 다 넣지 않으셔도 됩니다.</b> 대신 「<b>모든 열을 한 페이지에 맞추기</b>」만 켜 두시면, '
+        + '세로로 몇 장이 되더라도 열이 잘리지 않습니다.')
+    + tip('여러 장이 된다면 <b>머리글 행 반복</b>을 지정해 주세요. '
+        + '<span style="color:#8a6116">페이지 레이아웃 → 인쇄 제목 → 반복할 행</span>')
+    + tip('<b>설정은 시트마다 따로</b>입니다. 시트가 여러 개면 각각 확인이 필요합니다.')
+    + tip('저장 전 <b>페이지 나누기 미리보기</b>로 잘리는 열이 없는지 보시면 확실합니다.')
+    + '</ul>'
+    + '<div style="margin-top:7px;padding-top:6px;border-top:1px dashed #ecd9a8">'
+    + '<span style="color:#8a6116">확인 대상</span> &nbsp;' + list + '</div>';
+}
+
 function renderAccFiles(){
   const totalMB=accFiles.reduce((s,f)=>s+f.size,0)/1024/1024;
+  updateXlsLayoutNote();
   document.getElementById('acc-file-list').innerHTML = accFiles.map((f,i)=>
     `<div class="file-item"><span>📄 ${f.name} <span style="color:#a19f9d">(${(f.size/1024/1024).toFixed(2)}MB)</span></span><button onclick="removeAccFile(${i})">✕</button></div>`
   ).join('')+(accFiles.length?`<div style="font-size:11px;color:#605e5c;text-align:right;margin-top:4px">합계: ${totalMB.toFixed(2)}MB / 20MB</div>`:'');
@@ -5327,7 +5373,9 @@ function accDetectMyRoles() {
 
 // 지금 고른 담당자가 결재할 차례인 건
 function accIsMyTurn(v) {
-  return !!_accQuickView && (v._curEmail || '') === _accQuickView;
+  const email = _accQuickView;
+  if (!email || !v) return false;   // 목록 로딩 중 빈 행이 섞이면 여기서 멈춰 목록 전체가 안 그려진다
+  return (v._curEmail || '') === email;
 }
 
 
@@ -5347,6 +5395,7 @@ function accIsRelated(v) {
 // 지우지 않고 남겨 둔다 — 「처리할 차례만 보기」 같은 요청이 오면 다시 쓸 판정이고,
 // 08-28 에 미사용 함수를 지우다 인접 함수까지 잘려 관리자 탭이 백지가 된 적이 있다.
 function accRelatedRank(v) {
+  if (!v) return 2;                 // fields 가 없는 항목은 맨 뒤로
   if (accIsMyTurn(v)) return 0;
   const st = (v.Status || '').trim();
   if (st === '대기') return 1;
@@ -5972,7 +6021,7 @@ function renderAdminList(){
     // 수동 선택이 가능하던 시절에 만들어진 과거 데이터 중 "B1 없음 + PostingDone=완료" 조합이 남아 있어,
     // 저장값을 그대로 쓰면 목록과 상세가 서로 다르게 보인다. 판정 기준을 한 곳으로 통일.
     const postingDone = b1DocNo.trim() ? '완료' : '';
-    return `<tr onclick="openVoucherSP('${v._spId}','admin')">
+    return `<tr onclick="openVoucherSP('${v._spId}','admin',${!!v._srcDraft})">
     <td style="color:#a19f9d;font-size:.78rem">${reverseNo}</td>
     <td style="font-size:.78rem;color:#605e5c">${v.RequesterEmail||'-'}</td>
     <td style="font-size:.75rem;color:#0078d4">${v.Title||'-'}</td>
@@ -6038,7 +6087,7 @@ function renderList(){
     const p = n=>String(n).padStart(2,'0');
     return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
   };
-  body.innerHTML=list.map((v,i)=>`<tr onclick="openVoucherSP('${v._spId}','mylist')">
+  body.innerHTML=list.map((v,i)=>`<tr onclick="openVoucherSP('${v._spId}','mylist',${!!v._srcDraft})">
     <td style="color:#a19f9d;font-size:.73rem;text-align:center">${list.length-i}</td>
     <td style="font-size:.73rem;color:#605e5c" title="${escHtmlAttr(v.RequesterEmail||'')}">${v.RequesterEmail||'-'}</td>
     <td style="font-size:.72rem;color:#0078d4" title="${escHtmlAttr(v.Title||'')}">${v.Title||'-'}</td>
@@ -6220,6 +6269,13 @@ async function resumeDraft(spId) {
       showAccAlert('이어서 작성할 수 없습니다', '임시저장 상태의 전표만 불러올 수 있습니다.', '⚠️');
       return;
     }
+    // 본인이 저장한 임시저장만 다룰 수 있다. 관리자 탭에서 남의 임시저장이 보이므로
+    // 번호만 알면 콘솔로 열거나 지울 수 있었다. 기존 전표 불러오기(loadExistingVoucher)와 같은 기준.
+    const _myEmail = (user.email || user.username || '').toLowerCase();
+    if ((f.RequesterEmail || '').toLowerCase() !== _myEmail) {
+      showAccAlert('이어서 작성할 수 없습니다', '본인이 저장한 임시저장 전표만 불러올 수 있습니다.', '🔒');
+      return;
+    }
     resetForm();
     const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
     set('v-type', f.VoucherType);
@@ -6391,6 +6447,26 @@ function confirmDeleteDraft(spId) {
   if (!confirm('이 임시저장 전표를 삭제하시겠습니까?\n삭제 후에는 되돌릴 수 없습니다.')) return;
   deleteDraft(spId);
 }
+// 임시저장 첨부 폴더를 지운다. 실패해도 임시저장 삭제 자체는 진행한다 —
+// 파일이 남는 것보다 목록에 지워지지 않은 항목이 남는 쪽이 사용자에게 더 혼란스럽다.
+// 지우지 못한 경우는 콘솔에 남겨 IT 가 확인할 수 있게 한다.
+async function deleteDraftAttachments(voucherId) {
+  if (!voucherId) return;
+  try {
+    const drives = await api('/sites/' + siteId + '/drives');
+    const drive = (drives.value || []).find(d => d.name === 'AttachedFiles') || (drives.value || [])[0];
+    if (!drive) return;
+    const path = ATT_ROOT_DRAFT + '/' + encodeURIComponent(voucherId);
+    await api('/drives/' + drive.id + '/root:/' + path, 'DELETE');
+    console.warn('[Draft] 첨부 폴더 삭제:', path);
+  } catch (e) {
+    // 폴더가 원래 없으면 404 — 첨부 없이 저장한 임시저장이므로 정상이다.
+    if (!/404|not ?found/i.test(e.message || '')) {
+      console.warn('[Draft] 첨부 폴더 삭제 실패(항목 삭제는 계속):', e.message);
+    }
+  }
+}
+
 async function deleteDraft(spId) {
   try {
     applyCurrentVolume();
@@ -6399,9 +6475,22 @@ async function deleteDraft(spId) {
       showAccAlert('삭제할 수 없습니다', '임시저장 상태의 전표만 삭제할 수 있습니다.', '⚠️');
       return;
     }
+    // 본인이 저장한 임시저장만 다룰 수 있다. 관리자 탭에서 남의 임시저장이 보이므로
+    // 번호만 알면 콘솔로 열거나 지울 수 있었다. 기존 전표 불러오기(loadExistingVoucher)와 같은 기준.
+    const _myEmail = (user.email || user.username || '').toLowerCase();
+    if ((f.RequesterEmail || '').toLowerCase() !== _myEmail) {
+      showAccAlert('삭제할 수 없습니다', '본인이 저장한 임시저장 전표만 삭제할 수 있습니다.', '🔒');
+      return;
+    }
+    // 첨부 폴더를 먼저 지운다. 항목을 먼저 지우면 폴더 이름(전표 ID)을 알 수 없게 된다.
+    // 상신된 Draft 의 원본 파일은 정리하지 않는다 — 상신본이 이미 별도 폴더에 복사돼 있고,
+    // 복사가 실패한 경우 원본이 복구 수단이 되기 때문이다.
+    // 삭제는 다르다. 사용자가 「삭제」를 눌러 지운 것으로 보는 세금계산서·Invoice 가
+    // 같은 문서 라이브러리에 남아 SharePoint 검색에 걸린다. 그래서 삭제만 함께 정리한다.
+    await deleteDraftAttachments(f.Title || '');
     await api(`/sites/${siteId}/lists/${LIST_DRAFTS}/items/${spId}`, 'DELETE');
     if (_resumingDraftId === String(spId)) _resumingDraftId = null;
-    showAccAlert('삭제되었습니다.', '임시저장 전표를 목록에서 지웠습니다.', '🗑️');
+    showAccAlert('삭제되었습니다.', '임시저장 전표와 첨부파일을 지웠습니다.', '🗑️');
     await loadMyList();
   } catch(e) {
     console.error('[Draft] 삭제 실패:', e);
@@ -6479,8 +6568,18 @@ async function withdrawRequest(spId) {
   }
 }
 
-async function openVoucherSP(spId, fromTab){
+async function openVoucherSP(spId, fromTab, isDraft){
   _detailFromTab = fromTab || '';
+  // 목록에서 넘겨준 _srcDraft 를 그대로 받는다. 넘어오지 않으면 캐시에서 찾아 본다.
+  // 관리자 목록은 필드를 골라서 받으므로 캐시에 LinesJSON 이 없고, 아래에서 캐시를 버리고
+  // 다시 조회한다. 그때 Draft 를 LIST_REQUESTS 에서 찾으면 번호가 같은 다른 전표가 열린다.
+  // (Draft 번호는 DRAFT-5 처럼 작아 운영 전표와 겹치기 쉽다)
+  if (isDraft === undefined) {
+    const _hit = (adminListCache || []).concat(voucherListCache || [])
+                   .find(v => String(v._spId) === String(spId) && v._srcDraft);
+    isDraft = !!_hit;
+  }
+  const _detailList = isDraft ? LIST_DRAFTS : null;   // null 이면 아래 기존 로직(LIST_REQUESTS)
   let v = voucherListCache.find(x=>x._spId===spId)
     || adminListCache.find(x=>x._spId===spId)
     || (approvalQueueCache.find(x=>x._voucher?._spId===spId)?._voucher);
@@ -6497,7 +6596,8 @@ async function openVoucherSP(spId, fromTab){
       //    저장(saveB1Doc)은 확정된 LIST_REQUESTS로 쓰므로 읽기/쓰기 대상이 어긋날 수도 있다.
       await loadVolumeConfig();
       LIST_REQUESTS = VOL_CONFIG.reqList;
-      const item = await api('/sites/'+siteId+'/lists/'+LIST_REQUESTS+'/items/'+spId+'?$expand=fields');
+      const _srcList = _detailList || LIST_REQUESTS;
+      const item = await api('/sites/'+siteId+'/lists/'+_srcList+'/items/'+spId+'?$expand=fields');
       v = { ...item.fields, _spId: String(item.id) };
     }catch(e){ console.warn('[openVoucherSP] 직접 조회 실패:', e.message); }
   }
