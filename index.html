@@ -4058,13 +4058,15 @@ function showAccAlert(title, sub='', icon='✅', list='', wide=false) {
   const le = document.getElementById('acc-alert-list');
   if(le){
     // 단계 제목(「1단계 …」 · 「더 미루려면」)만 굵고 한 단계 크게. 본문은 이스케이프해서 글자로만 넣는다.
-    const _lines = String(list || '').split('\n').map(l => {
-      const e = escHtml(l);
-      return /^(\d+단계\s+\S|더 미루려면)/.test(l)
-        ? '<b style="display:block;font-size:.86rem;color:#1e293b;margin:2px 0 1px">' + e + '</b>'
-        : e;
+    // 제목은 block 이라 뒤에 줄바꿈을 더 붙이면 빈 줄이 생긴다. 제목 앞의 빈 줄도 여백(margin)으로 대신한다.
+    let html = '', prevHeader = false;
+    String(list || '').split('\n').forEach((l, i) => {
+      const isH = /^(\d+단계\s+\S|더 미루려면)/.test(l);
+      if (isH) { html += '<b style="display:block;font-size:.85rem;color:#1e293b;margin:' + (i ? '9px' : '0') + ' 0 2px">' + escHtml(l) + '</b>'; prevHeader = true; return; }
+      if (l === '') return;                       // 섹션 사이 빈 줄은 제목의 margin 이 대신한다
+      html += (prevHeader || !html ? '' : '\n') + escHtml(l); prevHeader = false;
     });
-    le.innerHTML = _lines.join('\n');
+    le.innerHTML = html;
     le.style.display = list ? 'block' : 'none';
   }
   document.getElementById('acc-alert-modal').style.display = 'flex';
@@ -9018,11 +9020,11 @@ function ptApply(){
 </script>
 <!-- GW 스타일 알림 모달 -->
 <div id="acc-alert-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:380px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.18);text-align:center">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:380px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.18);text-align:center;max-height:88vh;overflow-y:auto">
     <div id="acc-alert-icon" style="font-size:2rem;margin-bottom:10px">✅</div>
     <div id="acc-alert-title" style="font-size:1rem;font-weight:700;color:#1e293b;margin-bottom:6px;line-height:1.6"></div>
     <div id="acc-alert-sub" style="font-size:.8rem;color:#64748b;margin-bottom:20px;white-space:pre-line;line-height:1.7;text-align:center"></div>
-    <div id="acc-alert-list" style="display:none;font-size:.78rem;color:#475569;line-height:1.7;text-align:left;background:#f8fafc;border:1px solid #e6ebf1;border-radius:8px;padding:11px 14px;margin:-8px 0 18px;white-space:pre-line"></div>
+    <div id="acc-alert-list" style="display:none;font-size:.78rem;color:#475569;line-height:1.55;text-align:left;background:#f8fafc;border:1px solid #e6ebf1;border-radius:8px;padding:11px 14px;margin:-8px 0 18px;white-space:pre-line"></div>
     <button style="background:#0078d4;color:#fff;border:none;border-radius:8px;padding:9px 32px;font-size:.88rem;font-weight:600;cursor:pointer;font-family:inherit" onclick="closeAccAlert()">확인</button>
   </div>
 </div>
