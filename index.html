@@ -57,7 +57,8 @@ html.standalone-detail.detail-ready #standalone-loader { display: none !importan
 #app-header { display: none; }
 
 /* ── 헤더 · BU Admin 연락처 / 계정 정보 (APS 공통) ───────────────────
-   연락처가 글자로만 나열돼 제목·부제와 구분되지 않던 것을 프레임으로 묶는다.
+   연락처는 배경·테두리 없이 라벨과 값만 둔다. 틀을 씌우면 덩어리가 커져
+   제목보다 먼저 눈에 들어온다. 정렬은 격자가 잡아 주므로 틀이 없어도 흐트러지지 않는다.
    클래스 이름에 시스템 이름을 넣지 않아 전 시스템이 같은 정의를 쓴다. */
 /* 라벨이 「BU Admin」 ~ 「BU Admin(Customer)」 로 길이가 달라, flex 로 두면
    구분선이 줄마다 다른 자리에 서고 이메일 시작 위치도 어긋난다.
@@ -66,11 +67,11 @@ html.standalone-detail.detail-ready #standalone-loader { display: none !importan
    .hdr-contact-row 는 display:contents 로 두어 마크업을 바꾸지 않고 칸만 넘긴다. */
 .hdr-contact{display:inline-grid;grid-template-columns:max-content 1fr;align-items:center;
   row-gap:0;margin-top:7px;font-size:.66rem;line-height:1.45;color:#5a6472;
-  background:#f4f8fd;border:1px solid #dbe7f5;border-radius:7px;padding:4px 10px 4px 9px}
+  padding:0}
 .hdr-contact-row{display:contents}
 /* 위아래 여백을 0 으로 두어 줄마다의 구분선이 하나로 이어져 보인다. */
 .hdr-contact-tag{color:#2b5c9e;font-weight:700;letter-spacing:-.01em;white-space:nowrap;
-  padding:1px 7px 1px 0;margin-right:7px;border-right:1px solid #cfdff2}
+  padding:1px 0;margin-right:9px}
 .hdr-contact-mail{color:#3d4756;font-weight:500}
 .hdr-contact-mail a{color:#2b5c9e;text-decoration:none}
 .hdr-contact-mail a:hover{text-decoration:underline}
@@ -123,7 +124,7 @@ html.standalone-detail.detail-ready #standalone-loader { display: none !importan
 /* ── Account Lines ── */
 .lines-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .lines-scroll { overflow-x: auto; }
-/* 회계 정보 표는 열이 많아 지정 폭을 무시하고 늘어나면 가로 스크롤이 생긴다.
+/* 회계 라인은 열이 10개라 기본 폭으로는 가로 스크롤이 생긴다.
    지정한 열 폭대로 줄어들게 table-layout 을 고정한다. */
 table.lines { table-layout: fixed; width: 100%; }
 table.lines { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 900px; }
@@ -338,6 +339,16 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
    금액 열 오른쪽에만 여백을 조금 더 줘서 사이를 띄운다. */
 #tab-list .voucher-table th:nth-child(9),
 #tab-list .voucher-table td:nth-child(9) { padding-right: 10px; }
+/* 결재함도 같은 방식으로 고정한다. 12개 열이 지정 폭을 무시하고 늘어나
+   가로 스크롤이 생기던 것을 막는다(내 전표 목록 f6ba550 과 동일). */
+#tab-appr .list-table { table-layout: fixed; width: 100%; }
+#tab-appr .list-table th,
+#tab-appr .list-table td { padding-left: 4px; padding-right: 4px; }
+#tab-appr .list-table th { font-size: .7rem; white-space: normal; line-height: 16px; }
+#tab-appr .list-table td { overflow: hidden; text-overflow: ellipsis; }
+/* 오른쪽 정렬 금액과 가운데 정렬 배지가 이웃하는 자리만 따로 띄운다 */
+#tab-appr .list-table th:nth-child(9),
+#tab-appr .list-table td:nth-child(9) { padding-right: 10px; }
 .type-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
 .t-AP { background: #e1f0ff; color: #004578; }
 .t-AP_IMS { background: #e8eaf6; color: #283593; }
@@ -506,7 +517,49 @@ table.pt-tbl tfoot td{background:#eef1f5;font-weight:700;border-top:2px solid #1
 .list-table th,.list-table td{white-space:nowrap}
 .list-table th{padding:9px 12px;text-align:left;background:#f3f2f1;border-bottom:1px solid #edebe9;font-weight:600;color:#323130;font-size:.75rem}
 .list-table td{padding:9px 12px;border-bottom:1px solid #edebe9;color:#323130}
+/* 관리자 목록은 열이 13개라 여백까지 더하면 화면을 넘는다.
+   이 표에서만 좌우 여백을 줄여 모든 열이 한 화면에 들어가게 한다. */
+#tab-admin .list-table th,
+#tab-admin .list-table td{padding-left:7px;padding-right:7px}
+#tab-admin .list-table th{font-size:.7rem}
 .list-table tr:hover td{background:#f9f8f7}
+
+/* ── 목록 표 행 높이 기준 (APS 연동 10개 시스템 공통) ────────────────
+   시스템마다 세로 여백이 9px 과 5px 로 갈려 행 높이가 37px / 27px 로 달랐다.
+   같은 결재 흐름을 오가는데 표마다 밀도가 달라 보인다.
+   줄높이를 px 로 못 박아 글자 크기가 달라도 행 높이가 같아지게 한다.
+   가로 여백과 글자 크기는 열 수에 맞춰 시스템별로 이미 정한 값이라 두었다. */
+.list-table td { padding-top:6px; padding-bottom:6px; line-height:20px; }
+.list-table th { padding-top:7px; padding-bottom:7px; line-height:16px; }
+/* 배지는 inline-block 이라 자기 높이로 행을 밀어 올린다. 줄높이를 함께 낮춘다. */
+.list-table td .badge,
+.list-table td [class^="badge-"],
+.list-table td [class*=" badge-"] { line-height:1.25; }
+/* 셀 안의 버튼·배지는 inline-block 이라 자기 높이로 줄 상자를 밀어 올린다.
+   CSS 로 여백을 6px 로 맞춰도 결재함만 승인·반려 버튼(23px) 때문에 행이 35px 이 됐다.
+   셀 안 요소를 20px 안에 묶어 세 탭의 행 높이가 실제로 같아지게 한다. */
+.list-table td .btn-approve,
+.list-table td .btn-reject { padding-top:2px; padding-bottom:2px; line-height:16px; }
+.list-table td .badge,
+.list-table td [class^="badge-"],
+.list-table td [class*=" badge-"] { padding-top:1px; padding-bottom:1px; line-height:16px; }
+.list-table td button { line-height:16px; }
+/* ── 번호 열 (APS 연동 시스템 공통) ──────────────────────────────────
+   번호는 값이 아니라 자리 표시다. 시스템마다 파란 굵은 글씨 · 회색 · 지정 없음으로
+   갈려 있어 Goodwill 기준(옅은 회색 · 본문보다 한 단계 작게)으로 맞춘다.
+
+   렌더러가 인라인 style 로 색·크기를 박는 곳이 많다. 인라인은 CSS 를 이기므로
+   !important 가 필요하다. 렌더러를 30곳 넘게 고치는 대신 한 규칙으로 덮는다.
+
+   .9em 은 본문 대비 비율이라 표마다 글자 크기가 달라도 같은 비율로 작아진다
+   (GW 기준 .68rem / .74rem = 0.92).
+
+   colspan 이 붙은 칸은 「데이터 없음」·합계처럼 번호가 아니므로 제외한다. */
+.list-table td:first-child:not([colspan]) {
+  color:#a19f9d !important; font-weight:400 !important; font-size:.9em !important;
+}
+
+
 </style>
 <script>
 // ?openId= 단독 상세보기 모드 판별을 최대한 앞당긴다.
@@ -625,17 +678,17 @@ if (new URLSearchParams(location.search).get('openId')) {
         <thead>
           <tr>
             <th style="width:30px;text-align:center">번호</th>
-            <th style="width:92px">신청자</th>
+            <th style="width:96px">신청자</th>
             <th style="width:194px">Title</th>
             <th style="width:60px;text-align:center">유형</th>
-            <th style="width:88px">BP명</th>
-            <th style="width:121px">Purpose Title</th>
-            <th style="width:121px">Purpose</th>
-            <th style="width:86px;text-align:right">DR(KRW)</th>
-            <th style="width:86px;text-align:right">CR(KRW)</th>
-            <th style="width:70px;text-align:center">상태</th>
-            <th style="width:104px">신청일</th>
-            <th style="width:140px;text-align:center">Withdraw</th>
+            <th style="width:84px">BP명</th>
+            <th style="width:140px">Purpose Title</th>
+            <th style="width:142px">Purpose</th>
+            <th style="width:88px;text-align:right">DR(KRW)</th>
+            <th style="width:88px;text-align:right">CR(KRW)</th>
+            <th style="width:72px;text-align:center">상태</th>
+            <th style="width:106px">신청일</th>
+            <th style="width:92px;text-align:center">Withdraw</th>
           </tr>
         </thead>
         <tbody id="list-body"></tbody>
@@ -652,7 +705,7 @@ if (new URLSearchParams(location.search).get('openId')) {
         <div style="display:flex;align-items:center;gap:6px;font-weight:400">
           <span style="font-size:.72rem;color:#0078d4;font-weight:600;white-space:nowrap">기존 전표 불러오기</span>
           <input type="text" id="load-voucher-id" placeholder="예: ACC-Voucher-20**-**-**_ID-**" style="width:220px;border:1px solid #d2d0ce;border-radius:4px;padding:5px 9px;font-size:.74rem">
-          <button onclick="loadExistingVoucher()" style="padding:5px 12px;border:none;border-radius:4px;background:#0078d4;color:#fff;font-size:.74rem;cursor:pointer;white-space:nowrap">📥 불러오기</button>
+          <button onclick="loadExistingVoucher()" style="padding:5px 12px;border:none;border-radius:4px;background:#0078d4;color:#fff;font-size:.74rem;cursor:pointer;white-space:nowrap">⤵ 불러오기</button>
         </div>
       </div>
       <details id="pt-panel">
@@ -802,7 +855,7 @@ if (new URLSearchParams(location.search).get('openId')) {
       </div>
 
       <div class="section-title">2. BP 정보</div>
-      <div id="bp-notice" style="font-size:12px;color:#605e5c;margin-bottom:10px">GL 유형은 BP 코드 선택이 불필요합니다. 나머지 유형은 필수입니다.</div>
+      <div id="bp-notice" style="font-size:12px;color:#605e5c;margin-bottom:10px">GL 유형은 BP 코드 선택이 불필요합니다. 나머지 Voucher Type은 필수입니다.</div>
       <div id="bp-section-wrapper" style="transition:all .2s">
       <div class="form-row four">
         <div class="form-group">
@@ -855,23 +908,23 @@ if (new URLSearchParams(location.search).get('openId')) {
           <button class="btn btn-add" onclick="addLine()">＋ 라인 추가</button>
           <button class="btn btn-add" id="btn-add-bp" onclick="openBpModalExtra()" title="추가 BP를 선택하면 2.BP정보 아래와 회계 라인에 표시됩니다">＋ BP 추가</button>
           <button class="btn btn-add" id="btn-add-vat" onclick="addVatLineSmart()" title="VAT 라인을 추가합니다. 이미 VAT 라인이 있으면 그 아래에, 없으면 BP 라인 아래에 추가됩니다.">＋ VAT 라인 추가</button>
-          <button class="btn btn-add" id="btn-paste-line" onclick="pasteLine()" style="display:none" title="복사한 라인을 새 라인으로 붙여넣기">📥 붙여넣기</button>
+          <button class="btn btn-add" id="btn-paste-line" onclick="pasteLine()" style="display:none" title="복사한 라인을 새 라인으로 붙여넣기">붙여넣기</button>
         </div>
       </div>
       <div class="lines-scroll">
         <table class="lines">
           <thead>
             <tr>
-              <th style="min-width:160px">G/L Account Description</th>
-              <th style="width:120px">G/L Acc No.</th>
-              <th style="min-width:140px">Cost/Profit Center</th>
-              <th style="min-width:120px">Sub_PC</th>
-              <th style="min-width:110px">Description</th>
-              <th style="width:70px">Curr</th>
-              <th style="width:120px;text-align:right">DR(DEBIT)</th>
-              <th style="width:120px;text-align:right">CR(CREDIT)</th>
-              <th style="width:130px;text-align:right">Total(KRW)</th>
-              <th style="width:32px"></th>
+              <th style="width:150px">G/L Account Description</th>
+              <th style="width:82px">G/L Acc No.</th>
+              <th style="width:112px">Cost/Profit Center</th>
+              <th style="width:88px">Sub_PC</th>
+              <th style="width:104px">Description</th>
+              <th style="width:52px">Curr</th>
+              <th style="width:98px;text-align:right">DR(DEBIT)</th>
+              <th style="width:98px;text-align:right">CR(CREDIT)</th>
+              <th style="width:104px;text-align:right">Total(KRW)</th>
+              <th style="width:52px;text-align:center">관리</th>
             </tr>
           </thead>
           <tbody id="lines-body"></tbody>
@@ -885,7 +938,10 @@ if (new URLSearchParams(location.search).get('openId')) {
       </div>
 
       <div class="section-title">5. 첨부파일</div>
-      <div style="font-size:12px;color:#605e5c;margin-bottom:8px">세금계산서 또는 Invoice를 첨부해주세요. (최대 20MB)</div>
+      <div style="font-size:12px;color:#605e5c;margin-bottom:8px">
+        세금계산서 또는 Invoice를 첨부해주세요. (최대 20MB)<br>
+        <span style="color:#8a6116">Excel · CSV 파일 첨부 시, 인쇄 범위가 맞는지 확인한 뒤 첨부해 주세요.</span>
+      </div>
       <div class="file-area" onclick="document.getElementById('acc-file-input').click()">
         <input type="file" id="acc-file-input" multiple onchange="onAccFileSelect(event)">
         <div class="hint">📎 클릭하여 파일 첨부 (최대 20MB)</div>
@@ -938,7 +994,7 @@ if (new URLSearchParams(location.search).get('openId')) {
   <div class="card" style="padding:0;overflow-x:auto">
     <table class="list-table">
       <thead><tr>
-        <th style="width:40px">번호</th><th>신청자</th><th>Title</th><th>유형</th><th>BP명</th><th>Purpose Title</th><th>Purpose</th><th style="text-align:right">DR(KRW Total)</th><th style="text-align:right">CR(KRW Total)</th><th>Status</th><th>신청일</th><th>처리</th>
+        <th style="width:30px;text-align:center">번호</th><th style="width:92px">신청자</th><th style="width:196px">Title</th><th style="width:60px;text-align:center">유형</th><th style="width:84px">BP명</th><th style="width:128px">Purpose Title</th><th style="width:124px">Purpose</th><th style="width:88px;text-align:right">DR(KRW)</th><th style="width:88px;text-align:right">CR(KRW)</th><th style="width:72px;text-align:center">Status</th><th style="width:106px">신청일</th><th style="width:124px;text-align:center">처리</th>
       </tr></thead>
       <tbody id="appr-body">
         <tr><td colspan="12" style="text-align:center;padding:40px;color:#a19f9d">결재 대기 중인 전표가 없습니다.</td></tr>
@@ -954,7 +1010,7 @@ if (new URLSearchParams(location.search).get('openId')) {
     <button id="btn-vol-manage" onclick="openVolumeModal()" title="Approvals 리스트 세대를 추가하거나 전환합니다"
       style="padding:3px 10px;background:#fff;color:#605e5c;border:1px solid #d2d0ce;border-radius:4px;font-size:.72rem;cursor:pointer;white-space:nowrap;font-family:inherit">세대 관리</button>
   </div>
-  <!-- ACC 담당자 빠른 보기 — 설정 파일에 등록된 담당자에게만 보인다 -->
+  <!-- ACC 담당자 빠른 보기 — 설정 파일에 등록된 담당자와 IT 에게만 보인다 -->
   <div id="acc-quick-bar" style="display:none;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:12px;padding:9px 13px;background:#fcfdfe;border:1px solid #eef2f6;border-radius:10px"></div>
 
   <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
@@ -990,11 +1046,25 @@ if (new URLSearchParams(location.search).get('openId')) {
       <button onclick="exportAdminExcel()" style="padding:6px 14px;background:#107c10;color:#fff;border:none;border-radius:4px;font-size:.82rem;cursor:pointer;white-space:nowrap">📊 Excel 내보내기</button>
     </div>
   </div>
-  <div id="admin-table-wrap" class="card" style="padding:0;overflow-x:auto">
+  <div class="card" style="padding:0;overflow-x:auto">
     <table class="list-table">
-      <thead><tr>
-        <th style="width:40px">번호</th><th>신청자</th><th>Title</th><th>유형</th><th>BP명</th><th>Purpose Title</th><th>Purpose</th><th style="text-align:right">DR(KRW Total)</th><th style="text-align:right">CR(KRW Total)</th><th>Status</th><th>신청일</th><th style="width:120px">B1 Doc No.</th><th style="width:80px;text-align:center">Posting</th>
-      </tr></thead>
+      <thead>
+        <tr style="font-size:.7rem">
+          <th style="width:34px;text-align:center">번호</th>
+          <th style="width:104px">신청자</th>
+          <th style="width:178px">Title</th>
+          <th style="width:42px;text-align:center">유형</th>
+          <th style="width:104px">BP명</th>
+          <th style="width:119px">Purpose Title</th>
+          <th style="width:119px">Purpose</th>
+          <th style="width:92px;text-align:right">DR(KRW)</th>
+          <th style="width:92px;text-align:right">CR(KRW)</th>
+          <th style="width:60px;text-align:center">Status</th>
+          <th style="width:98px">신청일</th>
+          <th style="width:82px">B1 Doc No.</th>
+          <th style="width:54px;text-align:center">Posting</th>
+        </tr>
+      </thead>
       <tbody id="admin-body">
         <tr><td colspan="12" style="text-align:center;padding:40px;color:#a19f9d">전체 전표 목록이 여기에 표시됩니다.</td></tr>
       </tbody>
@@ -1433,14 +1503,25 @@ async function useVolumeOf(item) {
 // 등록된 모든 Approvals 세대를 순회하며 콜백을 실행하고 결과를 합침 (각 결과엔 _aprCode가 자동 태깅됨)
 // 등록된 모든 Approvals 세대를 "동시에" 조회하고 결과를 합침 (세대가 여러 개여도 왕복은 가장 느린 것 하나만큼만 걸림)
 // 콜백은 전역변수가 아니라 vol.id를 직접 참조해야 함 — 병렬 실행 중에는 전역 LIST_APPROVALS를 신뢰할 수 없기 때문
+// 직전 순회에서 실패한 세대. 호출한 쪽이 확인해 사용자에게 알린다.
+let _volFailed = [];
+function takeVolFailures() { const v = _volFailed; _volFailed = []; return v; }
+
 async function _forEachAprVolume(fn) {
   await loadVolumeConfig();
+  _volFailed = [];
   const results = await Promise.all((VOL_CONFIG.aprVolumes||[]).map(async vol => {
     try {
       const arr = await fn(vol);
       (arr||[]).forEach(item => { item._aprCode = vol.code; });
       return arr || [];
-    } catch(e) { console.warn('[Volume] '+vol.code+' 조회 실패:', e.message); return []; }
+    } catch(e) {
+      // 세대 하나가 실패하면 그 세대의 결재 이력이 통째로 빠진다.
+      // 예전에는 경고만 남겨, 이력이 비어 보여도 「원래 없는 것」 과 구분되지 않았다.
+      console.warn('[Volume] '+vol.code+' 조회 실패:', e.message);
+      _volFailed.push(vol.code);
+      return [];
+    }
   }));
   applyCurrentVolume(); // 다음 단일 작업(신규 작성 등)에 영향 없도록 현재 활성 세대로 복귀
   return results.flat();
@@ -1789,6 +1870,11 @@ async function token() {
     throw e;
   }
 }
+// 한 호출이 재시도로 쓸 수 있는 총 대기 시간과 횟수 (운영 08-21 규칙과 동일).
+// 서버가 Retry-After 로 60초를 요구해도 그대로 기다리지 않고 남은 예산만큼만 기다린다.
+const API_RETRY_MAX = 5;
+const API_RETRY_BUDGET = 8000;   // ms
+
 // UAT 에서 운영 데이터가 오염되지 않도록, 전표(Requests)·결재선(Approvals) 목록에 대한
 // 쓰기 요청을 실제로 보내지 않는다. 조회(GET)는 그대로 통과시켜 화면은 정상 동작한다.
 // 차단된 요청은 성공한 것처럼 가짜 응답을 돌려주어, 상신·결재 흐름이 중간에 끊기지 않고
@@ -1946,7 +2032,7 @@ function uatHandle(path, method, body) {
   return null;
 }
 
-async function api(path,method='GET',body=null,_retry=0) {
+async function api(path,method='GET',body=null,_retry=0, _spent=0) {
   // UAT: 두 목록은 서버로 나가지 않고 브라우저 샌드박스에서 처리한다 (읽기도 포함).
   if (IS_UAT) {
     const r = uatHandle(path, method, body);
@@ -1968,12 +2054,18 @@ async function api(path,method='GET',body=null,_retry=0) {
   // POST 를 그대로 다시 보내면 전표나 결재선 행이 두 번 만들어진다.
   // 429(스로틀)는 아예 처리되지 않은 것이 확실하므로 메서드와 무관하게 재시도한다.
   const _idem = method === 'GET' || method === 'PATCH' || method === 'DELETE';
-  if(!res.ok && (res.status === 429 || (_idem && [503,504].includes(res.status))) && _retry < 3) {
+  if(!res.ok && (res.status === 429 || (_idem && [503,504].includes(res.status))) && _retry < API_RETRY_MAX) {
     const ra = parseInt(res.headers.get('Retry-After')||'0',10);
-    const wait = ra>0 ? ra*1000 : Math.pow(2,_retry)*800;   // 0.8s → 1.6s → 3.2s
-    console.warn(`[API] ${res.status} 재시도 ${_retry+1}/3 (${wait}ms 후): ${method} ${path.slice(0,60)}`);
-    await new Promise(r=>setTimeout(r,wait));
-    return api(path,method,body,_retry+1);
+    let wait = ra>0 ? ra*1000 : Math.pow(2,_retry)*400;
+    // 서버가 긴 대기를 요구해도 그대로 따르지 않는다. 남은 예산만큼만 기다린다.
+    if (_spent + wait > API_RETRY_BUDGET) wait = API_RETRY_BUDGET - _spent;
+    if (wait <= 0) {
+      console.warn(`[API] ${res.status} — 대기 예산(${API_RETRY_BUDGET}ms)을 넘어 재시도하지 않습니다: ${method} ${path.slice(0,60)}`);
+    } else {   // 0.8s → 1.6s → 3.2s
+    console.warn(`[API] ${res.status} 재시도 ${_retry+1}/${API_RETRY_MAX} (${wait}ms 후): ${method} ${path.slice(0,60)}`);
+      await new Promise(r=>setTimeout(r,wait));
+      return api(path,method,body,_retry+1,_spent+wait);
+    }
   }
   if(!res.ok && [503,504].includes(res.status) && !_idem) {
     console.warn(`[API] ${res.status} — ${method} 는 중복 생성 방지를 위해 재시도하지 않습니다: ${path.slice(0,60)}`);
@@ -1984,28 +2076,37 @@ async function api(path,method='GET',body=null,_retry=0) {
 
 // ── 페이지네이션 전체 조회 헬퍼 (GW/BP-Master 동일 패턴, nextLink 자동순회) ──
 async function apiAll(path) {
-  let items = [], url = path;
+  let items = [], url = path, pages = 0;
   while(url) {
     // 페이지 단위로 재시도한다. 재시도가 없으면 스로틀 한 번에 조회 전체가 실패하고,
     // 승인처럼 "조회 후 쓰기"로 이어지는 작업이 중간에 끊겨 결재가 멈춘다.
-    let d = null;
+    let d = null, spent = 0;   // 이 페이지가 재시도로 기다린 시간
     for(let attempt = 0; ; attempt++) {
       const t = await token();
       const res = await fetch(url.startsWith('http')?url:GRAPH+url, {
         headers: { Authorization: 'Bearer '+t, Prefer: 'HonorNonIndexedQueriesWarningMayFailRandomly' }
       });
       if(res.ok) { d = await res.json(); break; }
-      if([429,503,504].includes(res.status) && attempt < 3) {
+      if([429,503,504].includes(res.status) && attempt < API_RETRY_MAX) {
         const ra = parseInt(res.headers.get('Retry-After')||'0',10);
-        const wait = ra>0 ? ra*1000 : Math.pow(2,attempt)*800;   // 0.8s → 1.6s → 3.2s
-        console.warn(`[apiAll] ${res.status} 재시도 ${attempt+1}/3 (${wait}ms 후)`);
-        await new Promise(r=>setTimeout(r,wait));
-        continue;
+        let wait = ra>0 ? ra*1000 : Math.pow(2,attempt)*400;
+        // 서버가 긴 대기를 요구해도 그대로 따르지 않는다. 남은 예산만큼만 기다린다.
+        if (spent + wait > API_RETRY_BUDGET) wait = API_RETRY_BUDGET - spent;
+        if (wait > 0) {
+          console.warn(`[apiAll] ${res.status} 재시도 ${attempt+1}/${API_RETRY_MAX} (${wait}ms 후)`);
+          spent += wait;
+          await new Promise(r=>setTimeout(r,wait));
+          continue;
+        }
+        console.warn(`[apiAll] ${res.status} — 대기 예산(${API_RETRY_BUDGET}ms)을 넘어 재시도하지 않습니다`);
       }
       throw new Error((await res.json()).error?.message||res.status);
     }
     items = items.concat(d.value || []);
     url = d['@odata.nextLink'] || null;
+    // 목록이 아무리 커도 999건씩 60번이면 6만 건이다. 그 이상이면 nextLink 가
+    // 끊기지 않고 도는 것이므로, 무한히 돌며 브라우저를 잡아먹지 않게 멈춘다.
+    if (++pages > 60) { console.warn("[apiAll] 페이지 상한 초과 — 중단:", String(path).slice(0,120)); break; }
   }
   // UAT: 실제 목록에 이 세션의 샌드박스 항목을 덧붙인다.
   return uatMergeList(path, {value: items});
@@ -2108,7 +2209,7 @@ async function boot(account) {
     document.documentElement.classList.add('detail-loading');
   }
 
-  document.getElementById('app').style.maxWidth='960px';
+  document.getElementById('app').style.maxWidth='1040px';
   document.getElementById('app-header').style.display='flex';
   // 괄호 안은 권한 판정에 실제로 쓰이는 주소를 보여준다(게스트는 UPN이 아닌 외부 실주소)
   setHdrUser(account.name||account.username, user.email||account.username);
@@ -2383,8 +2484,17 @@ function applyTodayExchangeRate() {
         return r&&r.rate>0?`<span><b>${cur}</b> ${Number(r.rate).toLocaleString()}</span>`:'';
       }).filter(Boolean).join('<span style="color:#d2d0ce;margin:0 4px">|</span>');
       const labelDate = hasToday ? today : (fallbackDate||today);
+      // 두 줄로 둔다. 첫 줄은 날짜와 환율, 둘째 줄은 안내.
+      // 날짜 뒤에 세로선을 두어 환율과 구분되면서도 한 줄로 이어 읽힌다.
       banner.style.display='block';
-      banner.innerHTML = `<div style="background:#f0f6ff;border:1px solid #c7e0f4;border-radius:4px;padding:8px 14px;margin-top:10px"><div style="margin-bottom:2px"><span style="color:#0078d4;font-weight:600;font-size:12px">${labelDate} 기준 참고 환율</span><span style="font-size:11px;color:#a19f9d;margin-left:8px">오늘 날짜 환율로 자동 기입</span></div><div style="font-size:11px;color:#a19f9d;margin-bottom:4px">· 수정 필요 시 BU Admin 확인 &nbsp;·&nbsp; 이전 날짜 환율이 뜨는 경우 <b>Ctrl+Shift+R</b> 로 새로고침</div><div style="font-size:12px;color:#323130">${parts}</div></div>`;
+      banner.innerHTML = `<div style="background:#f0f6ff;border:1px solid #c7e0f4;border-radius:5px;padding:8px 14px;margin-top:10px;line-height:1.7">`
+        + `<div style="font-size:12px;color:#323130">`
+          + `<span style="color:#0078d4;font-weight:600">${labelDate} 기준 환율</span>`
+          + `<span style="color:#c7e0f4;margin:0 9px">│</span>`
+          + parts
+        + `</div>`
+        + `<div style="font-size:11px;color:#a19f9d">오늘 날짜로 자동 기입됩니다. 수정이 필요하거나 환율이 보이지 않으면 BU Admin 에게 문의해 주세요.</div>`
+      + `</div>`;
     }
   }
 }
@@ -2634,6 +2744,8 @@ function switchTab(tab) {
   });
   // 바우처 작성은 좁은 너비, 목록/결재함/관리자는 넓은 레이아웃 (GW 동일)
   const appEl = document.getElementById('app');
+  // 회계 라인은 열이 10개라 960px 에서는 가로 스크롤이 생긴다.
+  // 작성 탭을 조금 넓혀 표가 한 화면에 들어가게 한다.
   if(appEl) appEl.style.maxWidth = tab==='new' ? '1040px' : '1280px';
   if(tab==='list') loadMyList();
   if(tab==='appr') loadApprovalQueue();
@@ -3600,7 +3712,7 @@ function copyLine(i) {
   _lineClipboard = {drcr:l.drcr, gl:l.gl, glName:l.glName, cctr:l.cctr, cctrName:l.cctrName, pc:l.pc, pcName:l.pcName, subpc:l.subpc, subpcName:l.subpcName, lineDesc:l.lineDesc, currency:l.currency, amount:l.amount};
   const btn = document.getElementById('btn-paste-line');
   if(btn) btn.style.display = 'inline-block';
-  showAccAlert('라인을 복사했습니다', '"📥 붙여넣기" 버튼으로 새 라인에 붙여넣을 수 있습니다.', '📤');
+  showAccAlert('라인을 복사했습니다', '아래 「붙여넣기」 버튼으로 새 라인에 넣을 수 있습니다.', '✔');
 }
 function pasteLine() {
   if(!_lineClipboard) return;
@@ -3660,7 +3772,7 @@ function renderLines() {
       <td style="text-align:right;font-weight:600;${restBg}">${drTxt}</td>
       <td style="text-align:right;font-weight:600;${restBg}">${crTxt}</td>
       <td style="text-align:right;font-weight:600;color:#323130;${restBg}">${totalTxt}</td>
-      <td style="white-space:nowrap">${isReservedRow ? '' : `<button class="btn-del" onclick="event.stopPropagation();copyLine(${i})" title="라인 복사">📤</button>`}${isVatRow ? '' : `<button class="btn-del" onclick="event.stopPropagation();deleteLine(${i})">✕</button>`}</td>
+      <td style="white-space:nowrap">${isReservedRow ? '' : `<button class="btn-del" onclick="event.stopPropagation();copyLine(${i})" title="라인 복사">❐</button>`}${isVatRow ? '' : `<button class="btn-del" onclick="event.stopPropagation();deleteLine(${i})">✕</button>`}</td>
     </tr>`;
   }).join('');
   updateTotals();
@@ -3942,10 +4054,6 @@ function showAccAlert(title, sub='', icon='✅', list='') {
   document.getElementById('acc-alert-sub').textContent = sub;
   const le = document.getElementById('acc-alert-list');
   if(le){ le.textContent = list || ''; le.style.display = list ? 'block' : 'none'; }
-  // 안내 목록이 붙는 알림은 줄이 길어 380px 에서는 한 줄이 두세 번 접힌다.
-  // 목록이 있을 때만 폭을 넓혀, 일반 알림은 지금처럼 작게 둔다.
-  const bx = document.getElementById('acc-alert-box');
-  if(bx) bx.style.maxWidth = list ? '520px' : '380px';
   document.getElementById('acc-alert-modal').style.display = 'flex';
 }
 function closeAccAlert() {
@@ -3963,8 +4071,10 @@ function onAccFileSelect(e) {
   renderAccFiles();
 }
 function removeAccFile(i){ accFiles.splice(i,1); renderAccFiles(); }
+// 엑셀 계열을 붙였는지 확인하고 안내 배너를 보여 준다.
+// 결재자는 브라우저에서 파일을 그대로 열어 보므로, 인쇄 범위가 어긋나 있으면
+// 표가 여러 장으로 쪼개지거나 잘려 내용을 확인할 수 없다.
 const XLS_EXT = ['xlsx','xls','xlsm','xlsb','csv'];
-
 function updateXlsLayoutNote(){
   const el = document.getElementById('xls-layout-note');
   if(!el) return;
@@ -4214,13 +4324,13 @@ async function saveVoucher(status) {
   }
 
   const blocks = document.getElementById('dr-cr-blocks');
-  if(!blocks.querySelector('.eq-block')){
-    alert('DR/CR 합계가 일치하지 않습니다.\n진행할 수 없습니다.\n\n라인 항목을 확인하고 DR/CR 합계를 맞춰주세요.');
+  if(status==='대기' && !blocks.querySelector('.eq-block')){
+    alert('DR/CR 합계가 일치하지 않습니다.\n결재 요청을 진행할 수 없습니다.\n\n라인 항목을 확인하고 DR/CR 합계를 맞춰주세요.');
     return;
   }
 
   // No.5: AP는 S(Vendor), AR/AP_CR은 C(Customer)여야 함 - 아닌 경우 경고 (주 BP + 추가 BP 전체 대상)
-  {
+  if(status==='대기') {
     const { expected, mismatched } = getBpCategoryMismatches(type);
     if(mismatched.length) {
       const expectedLabel = expected==='S' ? 'S(Vendor)' : 'C(Customer)';
@@ -4350,16 +4460,16 @@ async function saveVoucher(status) {
       const _accNote = 'Submitted by Accounting team member';
       let _accSaved = false;
       try {
-        await api(`/sites/${siteId}/lists/${_targetList}/items/${requestId}/fields`, 'PATCH', { AccLineSkipReason: _accNote });
+        await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${requestId}/fields`, 'PATCH', { AccLineSkipReason: _accNote });
         _accSaved = true;
       } catch(e) {
         console.warn('[Accounting결재라인] 전용 컬럼 저장 실패, 컬럼 생성 시도:', e.message);
         try {
-          const cols = await api(`/sites/${siteId}/lists/${_targetList}/columns`);
+          const cols = await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/columns`);
           if (!(cols.value||[]).some(c => c.name === 'AccLineSkipReason')) {
-            await api(`/sites/${siteId}/lists/${_targetList}/columns`, 'POST', { name:'AccLineSkipReason', text:{ allowMultipleLines:false } });
+            await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/columns`, 'POST', { name:'AccLineSkipReason', text:{ allowMultipleLines:false } });
           }
-          await api(`/sites/${siteId}/lists/${_targetList}/items/${requestId}/fields`, 'PATCH', { AccLineSkipReason: _accNote });
+          await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${requestId}/fields`, 'PATCH', { AccLineSkipReason: _accNote });
           _accSaved = true;
         } catch(e2){ console.warn('[Accounting결재라인] 컬럼 생성/저장 실패:', e2.message); }
       }
@@ -4374,22 +4484,22 @@ async function saveVoucher(status) {
       const _rdNote = rdExemptReason || '(사유 미기재)';
       let _rdSaved = false;
       try {
-        await api(`/sites/${siteId}/lists/${_targetList}/items/${requestId}/fields`, 'PATCH', { RDExemptReason: _rdNote });
+        await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${requestId}/fields`, 'PATCH', { RDExemptReason: _rdNote });
         _rdSaved = true;
       } catch(e) {
         console.warn('[RD제외] 전용 컬럼 저장 실패, 컬럼 생성 시도:', e.message);
         try {
-          const cols = await api(`/sites/${siteId}/lists/${_targetList}/columns`);
+          const cols = await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/columns`);
           if (!(cols.value||[]).some(c => c.name === 'RDExemptReason')) {
-            await api(`/sites/${siteId}/lists/${_targetList}/columns`, 'POST', { name:'RDExemptReason', text:{ allowMultipleLines:false } });
+            await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/columns`, 'POST', { name:'RDExemptReason', text:{ allowMultipleLines:false } });
           }
-          await api(`/sites/${siteId}/lists/${_targetList}/items/${requestId}/fields`, 'PATCH', { RDExemptReason: _rdNote });
+          await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${requestId}/fields`, 'PATCH', { RDExemptReason: _rdNote });
           _rdSaved = true;
         } catch(e2){ console.warn('[RD제외] 컬럼 생성/저장 실패:', e2.message); }
       }
       if (!_rdSaved) {
         try {
-          await api(`/sites/${siteId}/lists/${_targetList}/items/${requestId}/fields`, 'PATCH', { Purpose: purpose + '\n\n[요청자에 의한 RD 승인 제외 요청 사유: ' + _rdNote + ']' });
+          await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${requestId}/fields`, 'PATCH', { Purpose: purpose + '\n\n[요청자에 의한 RD 승인 제외 요청 사유: ' + _rdNote + ']' });
           console.warn('[RD제외] 전용 컬럼 대신 Purpose에 기록했습니다.');
         } catch(e3){ console.warn('[RD제외] 사유 기록 최종 실패:', e3.message); }
       }
@@ -5056,6 +5166,8 @@ function resetForm(){
 const TYPE_LABEL={AP:'AP',AP_IMS:'AP (IMS)',AP_CR:'AP (CR)',AR:'AR',GL:'GL',FA:'FA',ADV:'ADV',SET:'SET'};
 const TYPE_LABEL_FULL={AP:'AP - Accounts Payable',AP_IMS:'AP (IMS) - 부품',AP_CR:'AP - Customer Refund',AR:'AR - Accounts Receivable',GL:'GL - General Ledger',FA:'Fixed Asset',ADV:'Advance Payment',SET:'Settlement of Advance'};
 let voucherListCache = []; // SharePoint에서 로드한 내 전표 캐시
+// 직전 조회가 실패했는지. 빈 목록이 「없음」 인지 「못 불러옴」 인지 구분한다(운영 09-01).
+let _myListLoadFailed = false;
 
 // 최신순 정렬. 상신본은 SubmittedDate 로, 임시저장은 만든 시각으로 비교한다.
 // 임시저장은 SubmittedDate 가 없어 예전에는 두 값이 모두 0 이 되어
@@ -5088,6 +5200,7 @@ async function loadMyList() {
       apiAll(_mk(LIST_REQUESTS)),
       apiAll(_mk(LIST_DRAFTS)).catch(e => { console.warn('[Draft] 임시저장 조회 실패:', e.message); return {value:[]}; }),
     ]);
+    _myListLoadFailed = false;      // 성공했으니 직전 실패 표시를 지운다
     voucherListCache = [
       // createdDateTime 은 fields 가 아니라 항목 자체에 있다. Draft 는 SubmittedDate 가 없어
       // 이 값이 없으면 정렬 기준이 사라져 조회된 순서 그대로 남는다.
@@ -5095,8 +5208,10 @@ async function loadMyList() {
       ...draftData.value.map(item=>({_spId:item.id, _srcDraft:true, _created:item.createdDateTime||'', ...item.fields})),
     ].sort(_byNewest);
   } catch(e) {
+    // 조회에 실패했는데 빈 목록으로 그리면 「작성된 바우처가 없습니다」 가 뜬다. 실패를 표시해 둔다.
     console.error('loadMyList error:', e);
     voucherListCache = [];
+    _myListLoadFailed = true;
   }
   renderList();
 }
@@ -5184,17 +5299,17 @@ function renderApprovalQueue() {
     const v = item._voucher;
     if(!v._spId) console.warn('[ApprQueue] _voucher 매칭 실패 - RequestID:', item.RequestID);
     return `<tr onclick="openVoucherSP('${v._spId}','approval')" style="cursor:pointer">
-      <td style="color:#a19f9d;font-size:.78rem">${i+1}</td>
-      <td style="font-size:.78rem;color:#605e5c">${v.RequesterEmail||'-'}</td>
-      <td style="font-size:.75rem;color:#0078d4">${v.Title||'-'}</td>
-      <td><span class="type-badge t-${v.VoucherType}">${TYPE_LABEL[v.VoucherType]||v.VoucherType||'-'}</span></td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;color:#605e5c" title="${escHtmlAttr(v.BPName||'')}">${escHtml(v.BPName)||'-'}</td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem" title="${escHtmlAttr(spText(v.PurposeTitle||''))}">${escHtml(spText(v.PurposeTitle))||'-'}</td>
-      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem">${escHtml(spText(v.Purpose))||'-'}</td>
-      <td style="text-align:right;font-weight:700;color:#0078d4;font-size:.78rem">${fmtK(v.TotalDR_KRW)}</td>
-      <td style="text-align:right;font-weight:700;color:#c0392b;font-size:.78rem">${fmtK(v.TotalCR_KRW)}</td>
-      <td><span class="${stMap[v.Status]||'badge-대기'}">${stLabel[v.Status]||v.Status}</span></td>
-      <td style="font-size:.78rem;color:#605e5c">${fmtDate(v.SubmittedDate)}</td>
+      <td style="color:#a19f9d;font-size:.73rem;text-align:center">${i+1}</td>
+      <td style="font-size:.73rem;color:#605e5c" title="${escHtmlAttr(v.RequesterEmail||'')}">${v.RequesterEmail||'-'}</td>
+      <td style="font-size:.72rem;color:#0078d4" title="${escHtmlAttr(v.Title||'')}">${v.Title||'-'}</td>
+      <td style="text-align:center"><span class="type-badge t-${v.VoucherType}" style="font-size:.62rem;padding:1px 5px">${TYPE_LABEL[v.VoucherType]||v.VoucherType||'-'}</span></td>
+      <td style="font-size:.73rem;color:#605e5c" title="${escHtmlAttr(v.BPName||'')}">${escHtml(v.BPName)||'-'}</td>
+      <td style="font-size:.73rem" title="${escHtmlAttr(spText(v.PurposeTitle||''))}">${escHtml(spText(v.PurposeTitle))||'-'}</td>
+      <td style="font-size:.73rem" title="${escHtmlAttr(spText(v.Purpose||''))}">${escHtml(spText(v.Purpose))||'-'}</td>
+      <td style="text-align:right;font-weight:700;color:#0078d4;font-size:.73rem" title="${fmtK(v.TotalDR_KRW)}">${fmtK(v.TotalDR_KRW)}</td>
+      <td style="text-align:right;font-weight:700;color:#c0392b;font-size:.73rem" title="${fmtK(v.TotalCR_KRW)}">${fmtK(v.TotalCR_KRW)}</td>
+      <td style="text-align:center"><span class="${stMap[v.Status]||'badge-대기'}" style="font-size:.63rem;padding:1px 6px">${stLabel[v.Status]||v.Status}</span></td>
+      <td style="font-size:.72rem;color:#605e5c">${fmtDate(v.SubmittedDate)}</td>
       <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap">
         <button class="btn-approve" style="padding:4px 10px;font-size:.72rem;background:#107c10;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-right:4px" onclick="showApprConfirm(${item._apprId},'승인',${item.RequestID},'${v._aprCode||''}')">승인</button>
         <button class="btn-reject" style="padding:4px 10px;font-size:.72rem;background:#a4262c;color:#fff;border:none;border-radius:4px;cursor:pointer" onclick="showApprConfirm(${item._apprId},'반려',${item.RequestID},'${v._aprCode||''}')">반려</button>
@@ -5426,15 +5541,16 @@ let adminListRaw = [];
 // 「내가 올린 건」을 따로 보려고 관리자 탭을 계속 새로고침하고,
 // 몇 차에서 멈췄는지 보려고 전표를 하나씩 열어야 했다.
 // 설정 파일에 등록된 담당자에게만 요약 바를 띄우고, 한 번 눌러 걸러 보게 한다.
+// 빠른 보기 칩에 띄울 담당자. AP·AR·GL 세 역할만 둔다.
+// Accounting Head·CFO 는 전 전표를 결재하는 자리라 칩으로 걸러 볼 실익이 없다.
 const ACC_ROLE_KEYS = [
-  ['ACC-Voucher_AP',         'AP 담당',         'AP',  '#0f766e'],
-  ['ACC-Voucher_AR',         'AR 담당',         'AR',  '#7c3aed'],
-  ['ACC-Voucher_GL',         'GL 담당',         'GL',  '#b45309'],
-  ['ACC-Voucher_ACCOUNTING', 'Accounting Head', 'ACC', '#0078d4'],
-  ['ACC-Voucher_CFO',        'CFO',             'CFO', '#a4262c'],
+  ['ACC-Voucher_AP', 'AP 담당', '#107c10'],
+  ['ACC-Voucher_AR', 'AR 담당', '#107c10'],
+  ['ACC-Voucher_GL', 'GL 담당', '#107c10'],
 ];
+
 let _accMyRoles = [];      // 이 사용자가 맡은 역할 이름
-let _accQuickView = '';    // '' | 'mine' | 'todo'
+let _accQuickView = '';    // 지금 보고 있는 담당자 이메일 (빈 값이면 전체)
 
 // IT 담당자로 보고 있는가 (역할을 맡지 않았지만 ACC-Voucher_IT 에 등록된 경우)
 function _isItViewer() {
@@ -5452,23 +5568,25 @@ function accDetectMyRoles() {
   const roles = ACC_ROLE_KEYS
     .filter(([k]) => ((cfgVal(_sysConfig, k) || {}).email || '').trim().toLowerCase() === me)
     .map(([, label]) => label);
-  // IT 담당자(ACC-Voucher_IT)는 역할을 맡고 있지 않아도 화면을 볼 수 있어야 한다.
-  // 문의가 들어왔을 때 담당자와 같은 화면으로 확인해야 상황을 파악할 수 있다.
-  if (!roles.length && IT_EMAILS.map(e=>e.toLowerCase()).includes(me)) return ['IT'];
-  return roles;
+  if (roles.length) return roles;
+  // 담당 역할이 없어도 관리자 탭에 들어올 수 있는 사람이면 바를 띄운다.
+  // 칩은 어차피 누구나 눌러 볼 수 있고, 아래 표에서도 전건이 보인다.
+  // 여기서만 막으면 Accounting Head·CFO 처럼 결재를 총괄하는 자리가
+  // 담당자별로 걸러 보지 못하게 된다.
+  if (IT_EMAILS.map(e=>e.toLowerCase()).includes(me)) return ['IT'];
+  if (ADMIN_EMAILS.map(e=>e.toLowerCase()).includes(me)) return ['관리자'];
+  return [];
 }
 
-// 지금 고른 담당자가 결재할 차례인 건
+// 지금 고른 담당자가 결재할 차례인 건.
+// 남의 칩을 볼 때도 그 담당자 기준이라, 「그 사람이 처리할 건」이 맨 위로 온다.
 function accIsMyTurn(v) {
-  const email = _accQuickView;
-  if (!email || !v) return false;   // 목록 로딩 중 빈 행이 섞이면 여기서 멈춰 목록 전체가 안 그려진다
-  return (v._curEmail || '') === email;
+  return !!_accQuickView && !!v && (v._curEmail || '') === _accQuickView;
 }
-
 
 // 특정 이메일과 관련된 전표인지 — 그 사람이 올렸거나 결재선에 있는 것.
 function accRelatedTo(v, email) {
-  if (!email) return false;
+  if (!email || !v) return false;
   if ((v.RequesterEmail || '').trim().toLowerCase() === email) return true;
   return (v._line || []).some(a => (a.email || '') === email);
 }
@@ -5482,44 +5600,30 @@ function accIsRelated(v) {
 // 지우지 않고 남겨 둔다 — 「처리할 차례만 보기」 같은 요청이 오면 다시 쓸 판정이고,
 // 08-28 에 미사용 함수를 지우다 인접 함수까지 잘려 관리자 탭이 백지가 된 적이 있다.
 function accRelatedRank(v) {
-  if (!v) return 2;                 // fields 가 없는 항목은 맨 뒤로
+  if (!v) return 2;   // 필드가 없는 항목은 맨 뒤로. 여기서 멈추면 목록 전체가 안 나온다.
   if (accIsMyTurn(v)) return 0;
   const st = (v.Status || '').trim();
   if (st === '대기') return 1;
-  if (st === DRAFT_STATUS) return 2;
-  return 3;   // 승인완료 · 반려 · 철회
+  return 2;   // 승인완료 · 반려 · 철회
 }
 
 // _accQuickView 에는 「어느 담당자 기준으로 볼지」의 이메일이 들어간다. 빈 값이면 전체.
 async function accSetQuickView(email) {
-  const me = (user?.email || user?.username || '').trim().toLowerCase();
-  // 칩은 다섯 역할 모두 보이지만, 열어 볼 수 있는 건 본인 것뿐이다.
-  // 이미 관리자 탭에 들어온 사람이라 「권한 없음」은 맞지 않다.
-  // 「이 보기는 담당자 본인 화면」이라는 점을 알려 주고, 전체 목록은 그대로 쓸 수 있음을 덧붙인다.
-  if (email && email !== me && !_isItViewer()) {
-    const info = ACC_ROLE_KEYS.find(([k]) => accRoleEmail(k) === email);
-    const who  = info ? (((cfgVal(_sysConfig, info[0]) || {}).name || '').trim() || email) : email;
-    const role = info ? info[1] : '';
-    showAccAlert(
-      'Personal view',
-      (role ? role + ' · ' : '') + who + '\n\n'
-      + 'This shortcut opens that person\'s own queue, so it is available to them only.\n\n'
-      + 'You can still review every voucher in the table below —\n'
-      + 'use the status, type, or keyword filters to narrow it down.',
-      '👤');
-    return;
-  }
+  // 담당자 칩은 누구나 눌러 볼 수 있다. 관리자 탭에 들어온 사람은
+  // 어차피 아래 표에서 모든 전표를 볼 수 있으므로 따로 막을 이유가 없다.
   _accQuickView = (_accQuickView === email) ? '' : email;
-  // 누를 때마다 서버에서 다시 읽는다. 캐시만 다시 거르면 방금 결재된 건이 반영되지 않는다.
+  // 누를 때마다 서버에서 다시 읽는다.
+  // 캐시만 다시 거르면 다른 사람이 방금 결재한 건이 반영되지 않아,
+  // 담당자가 최신 상태인 줄 알고 지나칠 수 있다.
   await accReloadAdmin();
 }
 
-
-// 목록을 다시 읽고 화면을 갱신한다. 진행 중에는 버튼과 칩을 잠가 연타를 막는다.
+// 목록을 다시 읽고 화면을 갱신한다. 진행 중에는 칩을 잠가 연타를 막는다.
 let _accReloading = false;
 async function accReloadAdmin() {
   if (_accReloading) return;
   _accReloading = true;
+  // 지금 고른 담당자와 필터는 그대로 둔 채 데이터만 새로 읽는다.
   const bar = document.getElementById('acc-quick-bar');
   const btn = document.getElementById('admin-refresh');
   const ico = document.getElementById('admin-refresh-ico');
@@ -5527,10 +5631,10 @@ async function accReloadAdmin() {
   if (btn) btn.disabled = true;
   if (ico) ico.classList.add('spin');
   try {
-    await loadAdminList();
+    await loadAdminList();       // 안에서 applyAdminFilters·accRenderQuickBar 까지 수행
   } catch(e) {
     console.warn('[관리자] 새로고침 실패:', e && e.message);
-    applyAdminFilters();
+    applyAdminFilters();         // 실패해도 화면은 현재 데이터로 맞춰 둔다
   } finally {
     _accReloading = false;
     const b2 = document.getElementById('acc-quick-bar');
@@ -5542,6 +5646,11 @@ async function accReloadAdmin() {
   }
 }
 
+// 결재행이 아직 안 왔는지. 관리자 목록은 전표를 먼저 그리고 결재행을 뒤에서 받는데,
+// 그 사이에는 「신청자 본인 건」 만 세어져 숫자가 9 → 75 로 바뀐다.
+// 틀린 숫자를 잠깐이라도 보여 주지 않도록, 준비되기 전에는 「…」 로 두고 누르지 못하게 한다.
+let _accLineReady = false;
+
 function accRenderQuickBar() {
   const bar = document.getElementById('acc-quick-bar');
   if (!bar) return;
@@ -5552,41 +5661,31 @@ function accRenderQuickBar() {
 
   // 칩은 다섯 역할 모두 그린다. 담당자가 누구인지 서로 알 수 있어야 하기 때문.
   // 다만 열어 볼 수 있는 건 본인 것뿐이고, IT 는 전부 열 수 있다.
-  const chip = ([key, full, short, color]) => {
+  const chip = ([key, full, color]) => {
     const email = accRoleEmail(key);
     if (!email) return '';
     const who   = ((cfgVal(_sysConfig, key) || {}).name || '').trim() || email.split('@')[0];
-    const allow = _isItViewer() || email === me;
     const on    = _accQuickView === email;
     const rel   = rows.filter(v => accRelatedTo(v, email));
     const todo  = rel.filter(v => (v._curEmail || '') === email).length;
-
-    return '<button onclick="accSetQuickView(\'' + email + '\')"'
-      + ' title="' + escHtmlAttr(full + ' · ' + who) + '"'
-      + ' style="display:inline-flex;align-items:center;gap:7px;padding:5px 6px 5px 5px;border-radius:18px;'
-      + 'cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .14s;'
-      + (on    ? 'background:' + color + ';border:1px solid ' + color + ';box-shadow:0 2px 6px ' + color + '40'
-       : allow ? 'background:#fff;border:1px solid #e2e8f0'
-               : 'background:#fff;border:1px solid #eef2f6;opacity:.62')
+    // 결재행이 오기 전에는 숫자 대신 「…」. 누르면 잘못된 목록이 보이므로 클릭도 막는다.
+    const _wait = !_accLineReady;
+    return '<button ' + (_wait ? 'disabled' : 'onclick="accSetQuickView(\'' + email + '\')"')
+      + ' title="' + escHtmlAttr(full + ' · ' + who + (_wait ? ' (집계 중)' : '')) + '"'
+      + ' style="display:inline-flex;align-items:center;gap:7px;padding:5px 12px 5px 11px;border-radius:18px;'
+      + 'font-family:inherit;white-space:nowrap;transition:all .14s;'
+      + (_wait ? 'cursor:default;opacity:.55;' : 'cursor:pointer;')
+      + (on ? 'background:' + color + ';border:1px solid ' + color + ';box-shadow:0 2px 6px ' + color + '40'
+            : 'background:#fff;border:1px solid #e2e8f0')
       + '">'
-      // 역할 배지
-      + '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:20px;'
-        + 'border-radius:11px;font-size:.62rem;font-weight:800;letter-spacing:.4px;'
-        + (on ? 'background:rgba(255,255,255,.24);color:#fff' : 'background:' + color + '14;color:' + color)
-        + '">' + short + '</span>'
-      // 담당자 이름
-      + '<span style="font-size:.74rem;font-weight:600;'
-        + (on ? 'color:#fff' : 'color:#334155') + '">' + escHtml(who) + '</span>'
-      // 건수
-      + '<span style="font-size:.72rem;font-weight:700;'
-        + (on ? 'color:rgba(255,255,255,.85)' : 'color:#94a3b8') + '">' + rel.length + '</span>'
-      // 결재 대기
+      + '<span style="font-size:.74rem;font-weight:600;' + (on ? 'color:#fff' : 'color:#334155') + '">' + escHtml(who) + '</span>'
+      + '<span style="font-size:.72rem;font-weight:700;' + (on ? 'color:rgba(255,255,255,.85)' : 'color:#94a3b8') + '">' + (_wait ? '…' : rel.length) + '</span>'
       + (todo
           ? '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;'
             + 'border-radius:9px;font-size:.61rem;font-weight:800;'
             + (on ? 'background:rgba(255,255,255,.9);color:' + color : 'background:#fff4e5;color:#b45309')
             + '">' + todo + '</span>'
-          : '<span style="width:3px"></span>')
+          : '')
       + '</button>';
   };
 
@@ -5609,11 +5708,33 @@ async function loadAdminList() {
   await loadVolumeConfig(); applyCurrentVolume();
   refreshVolStatusBar();
   try {
-    // 운영 전표와 임시저장을 함께 읽는다. 임시저장 조회가 실패해도 운영 목록은 보이게 한다.
-    // 목록 화면에 필요한 필드만 받는다. 회계 라인(LinesJSON)처럼 목록에서 쓰지 않는
-    // 큰 값이 빠져 응답이 크게 줄어든다. 상세보기와 Excel 은 각자 다시 조회한다.
+    // 전표와 결재선을 동시에 읽는다. 순서대로 기다리면 그만큼 두 배로 걸린다.
+    // 결재선은 한 번만 읽어 「진행 상태」와 「멈춘 전표」 판정에 함께 쓴다.
+    //
+    // 목록 화면에 필요한 필드만 받는다. 전표에는 회계 라인(LinesJSON)처럼
+    // 목록에서 쓰지 않는 큰 값이 들어 있어, 그대로 받으면 응답이 몇 배로 커진다.
+    // 상세보기와 Excel 은 각자 다시 조회하므로 여기서 다 받을 필요가 없다.
     const REQ_FIELDS = 'Title,VoucherType,Status,RequesterEmail,BPName,PurposeTitle,'
                      + 'Purpose,TotalDR_KRW,TotalCR_KRW,SubmittedDate,B1DocNo';
+    const APR_FIELDS = 'RequestID,ApprovalOrder,ApproverRole,ApproverName,ApproverEmail,Status';
+    // 결재행은 전표의 5~6배다(전표 한 장에 결재자가 5~6명). 세대가 둘이면 그 두 배다.
+    // 둘을 함께 기다리면 표가 나오기까지 그만큼 늦어진다.
+    // 전표만 먼저 받아 표를 그리고, 결재행은 뒤에서 받아 채운다.
+    // 표는 바로 보이고, 담당자별 빠른 보기의 숫자만 잠깐 뒤에 나타난다.
+    const _aprPromise = (async () => {
+      const out = [];
+      try {
+        await _forEachAprVolume(async (vol) => {
+          const d = await apiAll(`${GRAPH}/sites/${siteId}/lists/${vol.id}/items`
+                                 + `?expand=fields(select=${APR_FIELDS})&$top=999`);
+          out.push(...d.value);
+          return [];
+        });
+      } catch(e) { console.warn('[관리자] 결재 정보 조회 실패:', e && e.message); }
+      return out;
+    })();
+
+    // UAT: 운영 전표와 임시저장(Drafts)을 함께 읽는다. 임시저장 조회가 실패해도 운영 목록은 보이게 한다.
     const _req = `?expand=fields(select=${REQ_FIELDS})&$top=999`;
     const [data, draftData] = await Promise.all([
       apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items` + _req),
@@ -5625,95 +5746,105 @@ async function loadAdminList() {
       ...draftData.value.map(item=>({_spId:item.id, _srcDraft:true, _created:item.createdDateTime||'', ...item.fields})),
     ].sort(_byNewest);
 
-    // 각 전표의 결재 진행 상태를 함께 담는다.
-    // 지금은 몇 차에 걸려 있는지 보려면 전표를 하나씩 열어야 해서,
-    // 담당자가 상세를 여닫으며 확인하는 수고가 컸다.
-    try {
-      const _aprByReq = {};
-      await _forEachAprVolume(async (vol) => {
-        const APR_FIELDS = 'RequestID,ApprovalOrder,ApproverRole,ApproverName,ApproverEmail,Status';
-        const d = await apiAll(`${GRAPH}/sites/${siteId}/lists/${vol.id}/items`
-                               + `?expand=fields(select=${APR_FIELDS})&$top=999`);
-        d.value.forEach(i => {
-          const f2 = i.fields, rid = String(f2.RequestID);
-          (_aprByReq[rid] = _aprByReq[rid] || []).push({
-            order : f2.ApprovalOrder || 0,
-            role  : f2.ApproverRole || '',
-            name  : f2.ApproverName || '',
-            email : (f2.ApproverEmail || '').toLowerCase(),
-            status: ((f2.Status && f2.Status.Value) ? f2.Status.Value : f2.Status || '').trim(),
-          });
-        });
-        return [];
-      });
-      adminListRaw.forEach(v => {
-        const line = (_aprByReq[String(v._spId)] || []).sort((a,b)=>a.order-b.order);
-        v._line     = line;
-        const cur   = line.find(a => a.status === '대기');
-        v._curStep  = cur ? cur.order : 0;
-        v._curRole  = cur ? cur.role  : '';
-        v._curName  = cur ? cur.name  : '';
-        v._curEmail = cur ? cur.email : '';
-        v._totalStep = line.length;
-        v._doneStep  = line.filter(a => a.status === '승인').length;
-      });
-    } catch(e) { console.warn('[관리자] 결재 진행 정보 조회 실패:', e && e.message); }
+    // 전표만으로 표를 먼저 그린다. 결재선이 아직 없으면 「담당자별 빠른 보기」 만
+    // 비어 있고 목록·필터·검색은 모두 정상으로 동작한다.
+    adminListRaw.forEach(v => { v._line = []; v._curEmail = ''; });
+    _accLineReady = false;              // 아직 결재행이 없다 — 칩은 「…」 로 나온다
+    _accMyRoles = accDetectMyRoles();
+    applyAdminFilters();
 
+    // 여기서부터는 결재행이 도착한 뒤에 한다.
+    const _aprAll = await _aprPromise;
+    // 세대 하나가 실패했으면 그 세대의 결재 이력이 통째로 빠진 상태다.
+    // 빠른 보기 숫자와 「지금 누구 차례」 가 어긋나므로 그대로 알린다.
+    const _vf = takeVolFailures();
+    if (_vf.length) {
+      // ACC 에는 토스트가 없다. 다른 안내와 같은 방식으로 alert 를 쓴다.
+      alert('결재 이력 일부(' + _vf.join(', ') + ' 세대)를 불러오지 못했습니다.\n'
+          + '담당자별 건수가 실제와 다를 수 있습니다. 새로고침해 주세요.');
+    }
+
+    // 읽어 둔 결재행을 전표별로 묶는다. 담당자별 빠른 보기에서
+    // 「누가 결재선에 있는지」와 「지금 누구 차례인지」를 판단하는 데 쓴다.
+    const _aprByReq = {};
+    _aprAll.forEach(i2 => {
+      const f2 = i2.fields, rid = String(f2.RequestID);
+      (_aprByReq[rid] = _aprByReq[rid] || []).push({
+        order : f2.ApprovalOrder || 0,
+        role  : f2.ApproverRole || '',
+        name  : f2.ApproverName || '',
+        email : (f2.ApproverEmail || '').toLowerCase(),
+        status: ((f2.Status && f2.Status.Value) ? f2.Status.Value : f2.Status || '').trim(),
+      });
+    });
+    adminListRaw.forEach(v => {
+      const line = (_aprByReq[String(v._spId)] || []).sort((a,b)=>a.order-b.order);
+      v._line = line;
+      const cur = line.find(a => a.status === '대기');
+      v._curEmail = cur ? cur.email : '';
+    });
+
+    _accLineReady = true;               // 결재행이 도착했다 — 이제 실제 숫자를 보여 준다
     _accMyRoles = accDetectMyRoles();
     accRenderQuickBar();
-  
+
     // 진행이 멈춘 전표 식별 — 전표는 '대기'인데 '대기' 결재 행이 하나도 없는 건.
     // 철회가 중간에 끊기면 생기며, 겉으로는 정상 대기처럼 보여 방치되기 쉽다.
     // 표식은 IT 담당자(config: ACC-Voucher_IT)에게만 보이므로, 대상이 아니면 조회 자체를 생략한다.
     const _itForStuck = IT_EMAILS.map(e=>e.toLowerCase())
       .includes((user?.email||user?.username||'').trim().toLowerCase());
+    // 위에서 이미 읽은 결재행으로 판단한다. 같은 목록을 한 번 더 부르지 않는다.
     if(!_itForStuck) { _stuckReqIds = new Set(); }
-    else try {
-      const pend = new Set();
-      await _forEachAprVolume(async (vol) => {
-        const d = await apiAll(`${GRAPH}/sites/${siteId}/lists/${vol.id}/items?$expand=fields&$filter=fields/Status eq '대기'&$top=999`);
-        d.value.forEach(i => pend.add(String(i.fields.RequestID)));
-        return [];
-      });
+    else {
       _stuckReqIds = new Set(
-        adminListRaw.filter(v => (v.Status||'').trim()==='대기' && !pend.has(String(v._spId)))
+        adminListRaw.filter(v => (v.Status||'').trim()==='대기'
+                              && !(v._line||[]).some(a => a.status === '대기'))
                     .map(v => String(v._spId))
       );
       if(_stuckReqIds.size) console.warn('[관리자] 진행이 멈춘 전표:', [..._stuckReqIds].join(', '));
-    } catch(e) { _stuckReqIds = new Set(); console.warn('[관리자] 진행 상태 점검 실패:', e && e.message); }
+    }
+    // 결재행이 반영됐으니 표를 한 번 더 그린다.
+    // 「진행이 멈춘 전표」 표식과 현재 차례가 이때 나타난다.
+    // 사용자는 그 사이에도 목록을 보고 있으므로 기다리는 시간이 아니다.
+    applyAdminFilters(true);
   } catch(e) {
     console.error('loadAdminList error:', e);
     adminListRaw = [];
     body.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:#a19f9d">전표 목록을 불러올 수 없습니다.</td></tr>';
     return;
   }
-  applyAdminFilters();
+  // try 안에서 이미 두 번 그렸다(전표 도착 시 · 결재행 도착 시).
+  // 여기서 또 부르면 보던 페이지가 1페이지로 돌아간다.
 }
 
-function applyAdminFilters() {
+function applyAdminFilters(keepPage) {
   refreshDraftCount('admin');
-  _adminPgState.page = 0;
+  accRenderQuickBar();
+  // 결재행이 늦게 도착해 다시 그릴 때는 보던 페이지를 유지한다.
+  // 그러지 않으면 3페이지를 보던 중에 1페이지로 튕긴다.
+  if (!keepPage) _adminPgState.page = 0;
   const fs = (document.getElementById('admin-status')||{value:''}).value;
   const ft = (document.getElementById('admin-type')||{value:''}).value;
   const fk = ((document.getElementById('admin-search')||{value:''}).value||'').toLowerCase();
   adminListCache = adminListRaw.filter(v=>{
+    // UAT: Draft 보기가 켜져 있으면 임시저장만, 꺼져 있으면 임시저장을 감춘다.
     const _isDraftRow = (v.Status||'').trim() === DRAFT_STATUS;
     if(_draftView.admin ? !_isDraftRow : _isDraftRow) return false;
-    // 나와 관련된 전표만 보기
+    // 담당자 빠른 보기 — 고른 담당자와 관련된 전표만
     if(_accQuickView && !accIsRelated(v)) return false;
     if(fs && v.Status!==fs) return false;
     if(ft && v.VoucherType!==ft) return false;
     if(fk && !(v.RequesterEmail||'').toLowerCase().includes(fk) && !(v.Title||'').toLowerCase().includes(fk) && !(v.BPName||'').toLowerCase().includes(fk)) return false;
     return true;
   });
-  // 정렬은 건드리지 않는다. 목록은 이미 신청일 최신순이고 filter 는 순서를 유지하므로,
-  // 담당자 칩을 켜도 전체 보기와 같은 순서가 된다.
+  // 정렬은 건드리지 않는다. adminListRaw 가 이미 신청일 최신순이고,
+  // filter 는 순서를 그대로 유지하므로 담당자 칩을 켜도 전체 보기와 같은 순서가 된다.
   //
   // 08-28 에는 여기서 「그 사람이 처리할 차례 → 진행 중 → 완료」 순으로 다시 정렬했다.
-  // 그런데 Status 열이 「처리할 차례」와 「진행 중」을 똑같은 대기 배지로 보여 주기 때문에
+  // 그런데 Status 열은 「처리할 차례」와 「진행 중」을 똑같은 대기 배지로 보여 주기 때문에,
   // 화면에는 근거 없이 날짜만 뒤섞인 것처럼 보였다(08-30 지적).
   // 담당자별 처리 대기 건수는 칩의 주황 배지가 이미 알려 주고, 「대기」만 보려면
-  // 상태 필터가 있다. 목록 순서는 어느 칩을 눌러도 신청일 하나로 고정한다.
+  // 상태 필터가 있다. 목록의 순서는 어느 칩을 눌러도 신청일 하나로 고정한다.
   const countEl = document.getElementById('admin-count');
   if(countEl) countEl.textContent = '총 '+adminListCache.length+'건';
   renderAdminList();
@@ -6053,16 +6184,23 @@ function renderB1ChangeLog(logJson) {
   let logs = [];
   if(logJson) { try { logs = JSON.parse(logJson); } catch(e){ logs=[]; } }
   if(!logs.length){ el.innerHTML=''; return; }
-  const postColor = p => p==='완료' ? '#107c10' : '#a4262c';
+  // Posting 상태값은 화면 어디서나 '완료' / '미완료' 로 쓴다.
+  //   관리자 목록 Posting 열(5460행) · 상세 화면 Posting 표시(5759행) · 여기
+  // 라벨(Changed by · Posting status)만 영문이고 값은 한글이다.
+  // 이력에서만 Completed / Not posted 로 바꿨더니 같은 값이 화면마다 달리 보여 되돌렸다.
+  const isDone = p => String(p||'').trim() === '완료';
+  const postColor = p => isDone(p) ? '#107c10' : '#a4262c';
+  const postText  = p => isDone(p) ? '완료' : '미완료';
   el.innerHTML =
-    '<div style="font-size:.75rem;font-weight:700;color:#0078d4;padding:5px 9px;background:#f0f6ff;border-left:3px solid #0078d4;border-radius:3px;margin-bottom:6px">🔄 B1 Doc No. / Posting 변경 이력</div>' +
+    '<div style="font-size:.75rem;font-weight:700;color:#0078d4;padding:5px 9px;background:#f0f6ff;border-left:3px solid #0078d4;border-radius:3px;margin-bottom:6px">'
+    + '🔄 B1 Doc No. / Posting Change History (' + logs.length + ')</div>' +
     '<div id="b1-change-log-list" style="background:#f0f6ff;border:1px solid #c7e0f4;border-radius:6px;overflow:hidden;max-height:220px;overflow-y:auto">' +
     logs.map((log,i,arr)=>
       '<div style="padding:8px 12px;'+(i===arr.length-1?'':'border-bottom:1px solid #c7e0f4')+'">' +
         '<div style="font-size:.68rem;color:#a19f9d">'+escHtml(log.changedAt||'')+'</div>' +
-        '<div style="font-size:.72rem;color:#323130;margin-top:2px">변경자: <b>'+escHtml(log.changedBy||'')+'</b></div>' +
+        '<div style="font-size:.72rem;color:#323130;margin-top:3px">Changed by: <b>'+escHtml(log.changedBy||'')+'</b></div>' +
         '<div style="font-size:.72rem;color:#323130;margin-top:2px">B1 Doc No.: <span style="color:#605e5c">'+escHtml(log.fromB1||'-')+'</span> → <span style="font-weight:700;color:#0078d4">'+escHtml(log.toB1||'-')+'</span></div>' +
-        '<div style="font-size:.72rem;color:#323130;margin-top:2px">Posting: <span style="color:'+postColor(log.fromPosting||'미완료')+';font-weight:600">'+escHtml(log.fromPosting||'미완료')+'</span> → <span style="font-weight:700;color:'+postColor(log.toPosting||'미완료')+'">'+escHtml(log.toPosting||'미완료')+'</span></div>' +
+        '<div style="font-size:.72rem;color:#323130;margin-top:2px">Posting status: <span style="color:'+postColor(log.fromPosting)+';font-weight:600">'+postText(log.fromPosting)+'</span> → <span style="font-weight:700;color:'+postColor(log.toPosting)+'">'+postText(log.toPosting)+'</span></div>' +
       '</div>'
     ).join('') +
     '</div>';
@@ -6070,7 +6208,32 @@ function renderB1ChangeLog(logJson) {
   if(listEl) listEl.scrollTop = listEl.scrollHeight; // 최신 기록(맨 아래)이 보이도록 자동 스크롤
 }
 
-
+// ── 페이지 이동 (APS 공통) ────────────────────────────────────────────
+// 시스템마다 1…234…10 처럼 생략 표시가 달라 지금이 어디쯤인지 가늠하기 어려웠다.
+// 최대 7칸을 이어서 보이는 창으로 통일한다. 창은 끝에 가까워도 7칸을 채워
+// 버튼 위치가 흔들리지 않는다.
+// 처음(«)·마지막(») 버튼을 둔다 — 20쪽이면 › 를 열아홉 번 눌러야 끝에 닿는다.
+function apsPagerHtml(cur, pages, mk) {
+  if (!pages || pages <= 1) return '';
+  cur = Math.max(0, Math.min(cur, pages - 1));
+  const b = (on, act, label, page, title) =>
+    '<button ' + (on ? 'onclick="' + mk(page) + '"' : 'disabled') +
+    (title ? ' title="' + title + '"' : '') +
+    ' style="min-width:30px;padding:4px 9px;border-radius:4px;font-size:.8rem;font-family:inherit;' +
+    'border:1px solid ' + (act ? '#0078d4' : on ? '#d2d0ce' : '#edebe9') + ';' +
+    'background:' + (act ? '#0078d4' : on ? '#fff' : '#f3f2f1') + ';' +
+    'color:' + (act ? '#fff' : on ? '#323130' : '#a19f9d') + ';' +
+    'font-weight:' + (act ? '700' : '400') + ';' +
+    'cursor:' + (on ? 'pointer' : 'default') + '">' + label + '</button>';
+  const start = Math.max(0, Math.min(cur - 3, pages - 7));
+  const end   = Math.min(pages, start + 7);
+  let h = b(cur > 0, false, '&laquo;',  0,        '처음으로')
+        + b(cur > 0, false, '&lsaquo;', cur - 1,  '이전');
+  for (let p = start; p < end; p++) h += b(true, p === cur, String(p + 1), p, '');
+  h += b(cur < pages - 1, false, '&rsaquo;', cur + 1,   '다음')
+     + b(cur < pages - 1, false, '&raquo;',  pages - 1, '마지막으로');
+  return h;
+}
 
 function renderAdminList(){
   const body = document.getElementById('admin-body');
@@ -6109,38 +6272,30 @@ function renderAdminList(){
     // 저장값을 그대로 쓰면 목록과 상세가 서로 다르게 보인다. 판정 기준을 한 곳으로 통일.
     const postingDone = b1DocNo.trim() ? '완료' : '';
     return `<tr onclick="openVoucherSP('${v._spId}','admin',${!!v._srcDraft})">
-    <td style="color:#a19f9d;font-size:.78rem">${reverseNo}</td>
-    <td style="font-size:.78rem;color:#605e5c">${v.RequesterEmail||'-'}</td>
-    <td style="font-size:.75rem;color:#0078d4">${v.Title||'-'}</td>
-    <td><span class="type-badge t-${v.VoucherType}">${TYPE_LABEL[v.VoucherType]||v.VoucherType||'-'}</span></td>
-    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;color:#605e5c" title="${escHtmlAttr(v.BPName||'')}">${escHtml(v.BPName)||'-'}</td>
-    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem" title="${escHtmlAttr(spText(v.PurposeTitle||''))}">${escHtml(spText(v.PurposeTitle))||'-'}</td>
-    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem">${escHtml(spText(v.Purpose))||'-'}</td>
-    <td style="text-align:right;font-weight:700;color:#0078d4;font-size:.78rem">${fmtK(v.TotalDR_KRW)}</td>
-    <td style="text-align:right;font-weight:700;color:#c0392b;font-size:.78rem">${fmtK(v.TotalCR_KRW)}</td>
-    <td><span class="${stMap[v.Status]||'badge-대기'}">${stLabel[v.Status]||v.Status}</span>${stuckMark(v)}</td>
-    <td style="font-size:.78rem;color:#605e5c">${fmtDate(v.SubmittedDate)}</td>
-    <td style="font-size:.75rem;color:#323130">
+    <td style="color:#a19f9d;font-size:.73rem;text-align:center">${reverseNo}</td>
+    <td style="font-size:.73rem;color:#605e5c;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.RequesterEmail||'-'}</td>
+    <td style="font-size:.68rem;color:#0078d4;white-space:nowrap;letter-spacing:-.1px">${v.Title||'-'}</td>
+    <td style="text-align:center"><span class="type-badge t-${v.VoucherType}" style="font-size:.62rem;padding:1px 5px">${TYPE_LABEL[v.VoucherType]||v.VoucherType||'-'}</span></td>
+    <td style="max-width:98px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.73rem;color:#605e5c">${escHtml(v.BPName)||'-'}</td>
+    <td style="max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.73rem">${escHtml(spText(v.PurposeTitle))||'-'}</td>
+    <td style="max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.73rem;color:#605e5c">${escHtml(spText(v.Purpose))||'-'}</td>
+    <td style="text-align:right;font-weight:700;color:#0078d4;font-size:.73rem">${fmtK(v.TotalDR_KRW)}</td>
+    <td style="text-align:right;font-weight:700;color:#c0392b;font-size:.73rem">${fmtK(v.TotalCR_KRW)}</td>
+    <td style="text-align:center"><span class="${stMap[v.Status]||'badge-대기'}" style="font-size:.63rem;padding:1px 6px">${stLabel[v.Status]||v.Status}</span>${stuckMark(v)}</td>
+    <td style="font-size:.72rem;color:#605e5c;white-space:nowrap">${fmtDate(v.SubmittedDate)}</td>
+    <td style="font-size:.72rem;color:#323130;max-width:86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
       ${b1DocNo || '<span style="color:#a19f9d">-</span>'}
     </td>
-    <td style="text-align:center;font-size:.75rem">
+    <td style="text-align:center;font-size:.72rem">
       ${postingDone==='완료' ? '<span style="color:#107c10;font-weight:600">✅ 완료</span>' : '<span style="color:#a19f9d">미완료</span>'}
     </td>
   </tr>`;
   }).join('');
 
   // 페이지네이션 렌더
+  // 전체 페이지를 모두 버튼으로 그리고 있었다. 23쪽이면 버튼이 23개다.
   const pgEl = document.getElementById('admin-pagination');
-  if(pages <= 1) { pgEl.innerHTML = ''; }
-  else {
-    let html = '';
-    html += `<button onclick="adminPgGo(${cur-1})" ${cur===0?'disabled':''} style="padding:5px 10px;border:1px solid #d2d0ce;border-radius:4px;background:#fff;font-size:12px;cursor:pointer">‹</button>`;
-    for(let p=0;p<pages;p++){
-      html += `<button onclick="adminPgGo(${p})" style="padding:5px 10px;border:1px solid ${p===cur?'#0078d4':'#d2d0ce'};border-radius:4px;background:${p===cur?'#0078d4':'#fff'};color:${p===cur?'#fff':'#323130'};font-size:12px;cursor:pointer;font-weight:${p===cur?700:400}">${p+1}</button>`;
-    }
-    html += `<button onclick="adminPgGo(${cur+1})" ${cur===pages-1?'disabled':''} style="padding:5px 10px;border:1px solid #d2d0ce;border-radius:4px;background:#fff;font-size:12px;cursor:pointer">›</button>`;
-    pgEl.innerHTML = html;
-  }
+  if (pgEl) pgEl.innerHTML = apsPagerHtml(cur, pages, function(p){ return 'adminPgGo(' + p + ')'; });
 }
 
 function renderList(){
@@ -6164,7 +6319,9 @@ function renderList(){
     Pending:'대기',Draft:'임시저장',Approved:'승인완료',Rejected:'반려'};
   const body=document.getElementById('list-body');
   if(!list.length){
-    body.innerHTML=`<tr><td colspan="12" class="list-empty">${_draftView.my?'임시저장한 전표가 없습니다.':voucherListCache.length?'검색 결과가 없습니다.':'작성된 바우처가 없습니다.'}</td></tr>`;
+    body.innerHTML=`<tr><td colspan="12" class="list-empty">${_draftView.my ? '임시저장한 전표가 없습니다.'
+      : voucherListCache.length ? '검색 결과가 없습니다.'
+      : (_myListLoadFailed ? '목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.' : '작성된 바우처가 없습니다.')}</td></tr>`;
     return;
   }
   const fmtK=n=>Math.round(n||0).toLocaleString('ko-KR');
@@ -6186,7 +6343,7 @@ function renderList(){
     <td style="text-align:right;font-weight:700;color:#c0392b;font-size:.73rem" title="${fmtK(v.TotalCR_KRW)}">${fmtK(v.TotalCR_KRW)}</td>
     <td style="text-align:center"><span class="${stMap[v.Status]||'badge-대기'}" style="font-size:.63rem;padding:1px 6px">${stLabel[v.Status]||v.Status}</span></td>
     <td style="font-size:.72rem;color:#605e5c">${fmtDate(v.SubmittedDate)}</td>
-    <td onclick="event.stopPropagation()" style="text-align:center">${v.Status===DRAFT_STATUS?`<button onclick="resumeDraft('${v._spId}')" style="background:#0078d4;color:#fff;border:none;border-radius:4px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer;margin-right:4px">이어서 작성</button><button onclick="confirmDeleteDraft('${v._spId}')" style="background:#fff;color:#a4262c;border:1px solid #e6b3b7;border-radius:4px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer">삭제</button>`:v.Status==='대기'?`<button onclick="confirmWithdraw('${v._spId}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 12px;font-size:.75rem;cursor:pointer;font-family:inherit;white-space:nowrap">Withdraw</button>`:''}</td>
+    <td onclick="event.stopPropagation()" style="text-align:center">${v.Status===DRAFT_STATUS?`<button onclick="resumeDraft('${v._spId}')" style="background:#0078d4;color:#fff;border:none;border-radius:4px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer;margin-right:4px">이어서 작성</button><button onclick="confirmDeleteDraft('${v._spId}')" style="background:#fff;color:#a4262c;border:1px solid #e6b3b7;border-radius:4px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer">삭제</button>`:v.Status==='대기'?`<button onclick="confirmWithdraw('${v._spId}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:2px 12px;font-size:.75rem;line-height:16px;cursor:pointer;font-family:inherit;white-space:nowrap">Withdraw</button>`:''}</td>
   </tr>`).join('');
 }
 
@@ -6692,8 +6849,7 @@ async function openVoucherSP(spId, fromTab, isDraft){
       //    저장(saveB1Doc)은 확정된 LIST_REQUESTS로 쓰므로 읽기/쓰기 대상이 어긋날 수도 있다.
       await loadVolumeConfig();
       LIST_REQUESTS = VOL_CONFIG.reqList;
-      const _srcList = _detailList || LIST_REQUESTS;
-      const item = await api('/sites/'+siteId+'/lists/'+_srcList+'/items/'+spId+'?$expand=fields');
+      const item = await api('/sites/'+siteId+'/lists/'+LIST_REQUESTS+'/items/'+spId+'?$expand=fields');
       v = { ...item.fields, _spId: String(item.id) };
     }catch(e){ console.warn('[openVoucherSP] 직접 조회 실패:', e.message); }
   }
@@ -6897,8 +7053,13 @@ async function openVoucherSP(spId, fromTab, isDraft){
       <div style="display:flex;align-items:center;justify-content:flex-end">
         <button id="b1-save-btn" onclick="saveB1DocFromModal()" style="padding:6px 16px;background:#0078d4;color:#fff;border:none;border-radius:4px;font-size:.78rem;cursor:pointer;white-space:nowrap">저장</button>
       </div>
-      <div id="b1-change-log" style="margin-top:12px"></div>
     </div>
+
+    <!-- Accounting 담당자 변경 이력 — 결재선이 누구로 바뀌었는지는
+         신청자와 결재자도 알아야 하므로 어느 탭에서든 보여 준다. -->
+    <div id="acc-change-log" style="margin-top:16px"></div>
+    <!-- B1 Doc No./Posting 변경 이력 — 회계 처리 기록이라 관리자 탭에서만 -->
+    <div id="b1-change-log" style="margin-top:16px"></div>
 
     <!-- Accounting 담당자 변경 모달 -->
 <div id="acc-chg-modal" style="display:none;position:fixed;inset:0;background:rgba(15,39,68,.42);z-index:1200;align-items:center;justify-content:center;padding:20px">
@@ -6949,7 +7110,6 @@ async function openVoucherSP(spId, fromTab, isDraft){
       <div id="admin-comment-closed" style="display:none;font-size:.78rem;color:#a19f9d;padding:8px 0">Comments are closed for this voucher. Existing comments remain visible.</div>
       <!-- 등록된 의견은 B1 변경 이력과 동일한 형태의 별도 이력 블록으로 아래에 표시 -->
       <div id="admin-comments-list" style="margin-top:12px"></div>
-      <div id="acc-change-log"></div>
     </div>
 
     <div class="det-sec" style="margin-top:16px">결재 이력</div>
@@ -7020,10 +7180,14 @@ async function openVoucherSP(spId, fromTab, isDraft){
     b1Section.style.display = 'block';
     document.getElementById('modal-b1docno').value = v.B1DocNo||'';
     updatePostingBadge();
-    renderAccChangeLog(v.AccChangeLog||''); renderB1ChangeLog(v.B1ChangeLog);
+    renderB1ChangeLog(v.B1ChangeLog);
   } else if(b1Section) {
     b1Section.style.display = 'none';
+    renderB1ChangeLog('');   // 관리자 탭이 아니면 B1 이력은 감춘다
   }
+  // Accounting 담당자 변경 이력은 어느 탭에서든 보여 준다.
+  // 결재선이 누구로 바뀌었는지는 신청자와 결재자도 알아야 한다.
+  renderAccChangeLog(v.AccChangeLog||'');
   // PKF 담당자가 범위 밖 전표를 연 경우, 섹션이 왜 안 보이는지 알려준다(빈 화면이면 오해 소지가 크다)
   const pkfNoticeEl = document.getElementById('pkf-scope-notice');
   // 설정 파일을 못 읽으면 권한 명단이 통째로 비어, 관리자·PKF 인 사람도 섹션이 조용히 사라진다.
@@ -8754,11 +8918,11 @@ function ptApply(){
 </script>
 <!-- GW 스타일 알림 모달 -->
 <div id="acc-alert-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;align-items:center;justify-content:center">
-  <div id="acc-alert-box" style="background:#fff;border-radius:12px;padding:28px 32px;max-width:380px;width:90%;max-height:88vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18);text-align:center">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:380px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.18);text-align:center">
     <div id="acc-alert-icon" style="font-size:2rem;margin-bottom:10px">✅</div>
     <div id="acc-alert-title" style="font-size:1rem;font-weight:700;color:#1e293b;margin-bottom:6px;line-height:1.6"></div>
     <div id="acc-alert-sub" style="font-size:.8rem;color:#64748b;margin-bottom:20px;white-space:pre-line;line-height:1.7;text-align:center"></div>
-    <div id="acc-alert-list" style="display:none;font-size:.79rem;color:#475569;line-height:1.85;text-align:left;background:#f8fafc;border:1px solid #e6ebf1;border-radius:8px;padding:14px 18px;margin:-8px 0 18px;white-space:pre-line"></div>
+    <div id="acc-alert-list" style="display:none;font-size:.78rem;color:#475569;line-height:1.7;text-align:left;background:#f8fafc;border:1px solid #e6ebf1;border-radius:8px;padding:11px 14px;margin:-8px 0 18px;white-space:pre-line"></div>
     <button style="background:#0078d4;color:#fff;border:none;border-radius:8px;padding:9px 32px;font-size:.88rem;font-weight:600;cursor:pointer;font-family:inherit" onclick="closeAccAlert()">확인</button>
   </div>
 </div>
