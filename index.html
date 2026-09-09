@@ -4047,7 +4047,10 @@ function applyPcSubpcAvailability(pcEnabled, subpcEnabled, cctrEnabled, fullyLoc
 
 // list 를 넘기면 본문 아래에 왼쪽 정렬 목록 박스로 따로 보여준다.
 // 항목이 여러 줄일 때 가운데 정렬이면 읽기 어렵기 때문이다. (인자 생략 시 기존 동작 그대로)
-function showAccAlert(title, sub='', icon='✅', list='') {
+function showAccAlert(title, sub='', icon='✅', list='', wide=false) {
+  // 안내가 긴 경우(임시저장 불러오기 등)만 폭을 넓힌다. 기본은 380px 그대로.
+  const box = document.querySelector('#acc-alert-modal > div');
+  if (box) box.style.maxWidth = wide ? '640px' : '380px';
   const iconEl = document.getElementById('acc-alert-icon');
   if(iconEl){ iconEl.textContent = icon; iconEl.style.display = icon ? 'block' : 'none'; }
   document.getElementById('acc-alert-title').textContent = title;
@@ -6579,6 +6582,35 @@ async function resumeDraft(spId) {
     } catch(e) { lines = []; console.warn('[Draft] 라인 복원 실패:', e.message); }
     if (typeof renderLines === 'function') renderLines();
 
+    // ── 환율이 바뀌면 원화 환산액이 바뀌고, 금액 구간으로 정해지는 결재 단계(CFO·RD·CEO …)가
+    //    달라질 수 있다. 임시저장 때 환율로 계산한 결재선과 오늘 환율로 계산한 결재선을
+    //    비교해 사용자에게 알린다. 결재선 자체는 아래 renderApproval 이 오늘 금액으로 새로
+    //    정하고, 담당자 이름은 _draftFixedOverride 로 임시저장 때 사람을 유지한다.
+    const _rateOf = (cur, map) => cur === 'KRW' ? 1 : (parseFloat(map[cur]) || 0);
+    const _drKrwWith = (map) => lines.reduce((s, l) => {
+      if (l.drcr !== 'DR') return s;
+      const a = parseFloat(l.amount) || 0;
+      return s + (l.currency === 'KRW' ? a : Math.round(a * _rateOf(l.currency, map)));
+    }, 0);
+    const _todayMap = {}; Object.keys(_rateId).forEach(c => { _todayMap[c] = parseFloat(_today[c]) > 0 ? _today[c] : _rateMap[c]; });
+    const _krwOld = _drKrwWith(_rateMap), _krwNow = _drKrwWith(_todayMap);
+    // 역할 비교: buildApprovers 는 화면의 환율칸을 읽으므로, 옛 환율을 잠깐 넣었다가 되돌린다.
+    let _rolesOld = [], _rolesNow = [];
+    try {
+      const _snap = {};
+      Object.entries(_rateId).forEach(([c, id]) => { const el = document.getElementById(id); if (el) { _snap[id] = el.value; if (_rateMap[c]) el.value = _rateMap[c]; } });
+      _rolesOld = (buildApprovers() || []).map(a => a.role);
+      Object.entries(_snap).forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.value = v; });
+      _rolesNow = (buildApprovers() || []).map(a => a.role);
+    } catch(e) { console.warn('[Draft] 결재선 비교 실패:', e.message); }
+    const _RL = { TL:'Line Manager', MC:'Department Head', CEO:'CEO', RD:'RD', CTRL:'Controlling Head', AMGR:'Accounting Head', CFO:'CFO', ACC:'회계담당자' };
+    const _lbl = r => _RL[r] || r;
+    const _added = _rolesNow.filter(r => !_rolesOld.includes(r)).map(_lbl);
+    const _removed = _rolesOld.filter(r => !_rolesNow.includes(r)).map(_lbl);
+    const _won = n => (Math.round(n) || 0).toLocaleString('ko-KR') + '원';
+    const _savedDate = String(spText(f.Modified || f.Created || '')).slice(0, 10) || '임시저장 때';
+    const _todayDate = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+
     // RD 승인 제외 · Accounting 결재라인 — 임시저장 때 선택을 되살린다.
     // 결재선 자체는 상신 시점 기준으로 새로 구성되지만(담당자가 바뀔 수 있으므로),
     // 「제외할지 말지」는 전표의 성격이라 작성자가 정한 그대로 이어져야 한다.
@@ -6655,19 +6687,25 @@ async function resumeDraft(spId) {
       + '· Voucher Type → BP → 회계 라인 순으로 훑어보세요.\n'
       + '· 고칠 부분이 있으면 지금 수정합니다.\n'
       + '\n'
-      + '2단계  환율\n'
+      + '2단계  환율과 결재라인\n'
       + (_rateStale
-          ? '· 오늘 환율을 아직 받지 못해 임시저장 때 값이 들어 있습니다.\n'
-            + '· 상단 Exchange Rate 를 오늘 값으로 확인해 주세요.\n'
-          : '· 오늘 환율로 새로 채워졌습니다. 임시저장 때 값이 아닙니다.\n')
-      + (_rateDiff.length
-          ? '· 바뀐 통화 : ' + _rateDiff.join(' / ') + '\n'
-          : '')
+          ? '· 오늘 환율을 아직 받지 못해 임시저장 때 환율이 들어 있습니다. 상단 Exchange Rate 를 확인해 주세요.\n'
+          : (_rateDiff.length
+              ? '· 환율이 오늘 값으로 바뀌었습니다 (' + _savedDate + ' → ' + _todayDate + ') : ' + _rateDiff.join(' / ') + '\n'
+              : '· 환율은 오늘 값으로 채워졌고, 임시저장 때와 같습니다.\n'))
+      + (Math.round(_krwOld) !== Math.round(_krwNow)
+          ? '· DR 원화 환산 합계 : ' + _won(_krwOld) + ' → ' + _won(_krwNow) + '\n'
+          : '· DR 원화 환산 합계 : ' + _won(_krwNow) + ' (변동 없음)\n')
+      + (_added.length || _removed.length
+          ? '· ⚠ 금액 구간이 달라져 결재 단계가 바뀝니다'
+            + (_added.length ? ' — 추가: ' + _added.join(', ') : '')
+            + (_removed.length ? ' — 제외: ' + _removed.join(', ') : '') + '\n'
+            + '· 결재라인은 오늘 금액 기준으로 다시 정해졌습니다. 6. 결재라인에서 확인해 주세요.\n'
+          : '· 결재 단계는 임시저장 때와 같습니다.\n')
       + '\n'
-      + '3단계  결재라인\n'
-      + '· 임시저장 때의 결재라인이 그대로 복원됩니다.\n'
-      + '· 자동 지정 · 직접 선택 · 추가 결재자 모두 포함됩니다.\n'
-      + '· 그 사이 담당자가 바뀌었을 수 있으니 한 번 확인해 주세요.\n'
+      + '3단계  결재자 확인\n'
+      + '· 자동 지정 · 직접 선택 · 추가 결재자는 임시저장 때 사람으로 복원됩니다.\n'
+      + '· 그 사이 담당자가 바뀌었을 수 있으니 이름을 한 번 확인해 주세요.\n'
       + '\n'
       + '4단계  첨부파일\n'
       + '· 임시저장에 올린 첨부파일은 이미 올라와 있습니다.\n'
@@ -6680,7 +6718,8 @@ async function resumeDraft(spId) {
       + '\n'
       + '더 미루려면\n'
       + '· [Draft Submit] 을 다시 누르면 새 번호로 저장됩니다.\n'
-      + '· 그냥 나가면 저장되지 않습니다.');
+      + '· 그냥 나가면 저장되지 않습니다.',
+      true);
   } catch(e) {
     console.error('[Draft] 불러오기 실패:', e);
     showAccAlert('불러오지 못했습니다.', e.message, '⚠️');
