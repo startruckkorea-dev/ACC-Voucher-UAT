@@ -4056,7 +4056,17 @@ function showAccAlert(title, sub='', icon='✅', list='', wide=false) {
   document.getElementById('acc-alert-title').textContent = title;
   document.getElementById('acc-alert-sub').textContent = sub;
   const le = document.getElementById('acc-alert-list');
-  if(le){ le.textContent = list || ''; le.style.display = list ? 'block' : 'none'; }
+  if(le){
+    // 단계 제목(「1단계 …」 · 「더 미루려면」)만 굵고 한 단계 크게. 본문은 이스케이프해서 글자로만 넣는다.
+    const _lines = String(list || '').split('\n').map(l => {
+      const e = escHtml(l);
+      return /^(\d+단계\s+\S|더 미루려면)/.test(l)
+        ? '<b style="display:block;font-size:.86rem;color:#1e293b;margin:2px 0 1px">' + e + '</b>'
+        : e;
+    });
+    le.innerHTML = _lines.join('\n');
+    le.style.display = list ? 'block' : 'none';
+  }
   document.getElementById('acc-alert-modal').style.display = 'flex';
 }
 function closeAccAlert() {
