@@ -4338,6 +4338,14 @@ async function saveVoucher(status) {
     }
   }
 
+  // GL·FA 외 유형은 BP 코드가 필수 — 임시저장에서는 경고만 하고, 상신에서 막는다.
+  if(status==='대기' && type!=='GL' && type!=='FA'){
+    const _bp = document.getElementById('v-bp-code')?.value||'';
+    if(!_bp && !(extraBPs && extraBPs.length)){
+      showAccAlert('BP 코드가 비어 있습니다', type+' 유형은 "2. BP 정보"에서 Vendor/Customer No.를 선택해야 상신할 수 있습니다.', '⚠️');
+      return;
+    }
+  }
   const blocks = document.getElementById('dr-cr-blocks');
   if(status==='대기' && !blocks.querySelector('.eq-block')){
     alert('DR/CR 합계가 일치하지 않습니다.\n결재 요청을 진행할 수 없습니다.\n\n라인 항목을 확인하고 DR/CR 합계를 맞춰주세요.');
@@ -6400,6 +6408,18 @@ function refreshDraftCount(scope) {
 // ── Draft Submit 확인 ──────────────────────────────────────────────────
 // 「Draft Submit」 은 이름만 봐서는 상신처럼 읽힐 수 있다.
 // 결재가 올라가지 않는다는 점을 누르기 전에 분명히 알린다.
+// 임시저장(Draft)에서는 막지 않고 경고만 하는 항목 — 상신할 때 saveVoucher('대기') 가 다시 막는다.
+//  · DR/CR 합계 불일치   · GL·FA 외 유형인데 BP 코드가 없음
+// 임시저장은 「작성 중」을 보관하는 용도라 이 둘은 나중에 채워도 된다. 나머지 필수 항목은 상신과 같다.
+function draftSoftIssues() {
+  const issues = [];
+  const type = document.getElementById('v-type')?.value || '';
+  const blocks = document.getElementById('dr-cr-blocks');
+  if (blocks && lines.length && !blocks.querySelector('.eq-block')) issues.push('DR/CR 합계가 아직 맞지 않습니다.');
+  const bpCode = document.getElementById('v-bp-code')?.value || '';
+  if (type && type !== 'GL' && type !== 'FA' && !bpCode && !(extraBPs && extraBPs.length)) issues.push('BP 코드(Vendor/Customer No.)가 비어 있습니다. ' + type + ' 유형은 상신 시 필수입니다.');
+  return issues;
+}
 function askDraftSubmit() {
   const type = (document.getElementById('v-type')?.value || '').trim();
   const ptit = (document.getElementById('v-purpose-title')?.value || '').trim();
@@ -6416,13 +6436,12 @@ function askDraftSubmit() {
   // 이어서 작성 중이면 원본이 정리된다는 점을 함께 알린다.
   const warn = document.getElementById('draft-confirm-warn');
   if (warn) {
-    if (_resumingDraftId) {
-      warn.style.display = 'block';
-      warn.textContent = '이어서 작성 중입니다. 저장하면 새 임시저장본이 만들어지고 이전 건은 정리됩니다.';
-    } else {
-      warn.style.display = 'none';
-      warn.textContent = '';
-    }
+    const soft = draftSoftIssues();
+    const parts = [];
+    if (soft.length) parts.push('<div style="font-weight:600;margin-bottom:4px">⚠ 저장은 되지만 상신 전에 해결해야 합니다</div>' + soft.map(s => '<div>· ' + escHtml(s) + '</div>').join(''));
+    if (_resumingDraftId) parts.push('<div style="margin-top:' + (soft.length ? '8px' : '0') + '">이어서 작성 중입니다. 저장하면 새 임시저장본이 만들어지고 이전 건은 정리됩니다.</div>');
+    warn.style.display = parts.length ? 'block' : 'none';
+    warn.innerHTML = parts.join('');
   }
   const ok = document.getElementById('draft-confirm-ok');
   if (ok) ok.onclick = () => { closeDraftConfirm(); saveVoucher(DRAFT_STATUS); };
@@ -6625,6 +6644,9 @@ async function resumeDraft(spId) {
     const _savedDate = String(spText(f.Modified || f.Created || '')).slice(0, 10) || '임시저장 때';
     const _todayDate = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
+    // 임시저장 때 경고만 했던 항목(DR/CR · BP 코드)이 아직 남아 있는지 — 안내 1단계에 표시한다
+    const _softLeft = draftSoftIssues();
+
     // RD 승인 제외 · Accounting 결재라인 — 임시저장 때 선택을 되살린다.
     // 결재선 자체는 상신 시점 기준으로 새로 구성되지만(담당자가 바뀔 수 있으므로),
     // 「제외할지 말지」는 전표의 성격이라 작성자가 정한 그대로 이어져야 한다.
@@ -6700,6 +6722,7 @@ async function resumeDraft(spId) {
       '1단계  내용 확인\n'
       + '· Voucher Type → BP → 회계 라인 순으로 훑어보세요.\n'
       + '· 고칠 부분이 있으면 지금 수정합니다.\n'
+      + (_softLeft.length ? _softLeft.map(s => '· ⚠ ' + s + ' (상신 전 해결)\n').join('') : '')
       + '\n'
       + '2단계  환율과 결재라인\n'
       + (_rateStale
