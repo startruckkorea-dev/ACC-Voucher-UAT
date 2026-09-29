@@ -574,6 +574,12 @@ table.pt-tbl tfoot td{background:#eef1f5;font-weight:700;border-top:2px solid #1
 #resumed-att .ra-drop:hover{background:#a4262c;border-color:#a4262c;color:#fff}
 #resumed-att .ra-drop:focus-visible{outline:2px solid #a4262c;outline-offset:2px}
 #resumed-att .ra-foot{font-size:.68rem;color:#64748b;margin-top:2px}
+/* UAT 읽기 전용(09-29): 쓰기 단추 잠금 — 상신 · 임시저장 · 결재 · 철회 · 결재 의견 · 결재자 변경 · 세대 관리 · B1 저장 · 임시저장 삭제 */
+[data-uat-ro] .btn-draft, [data-uat-ro] button[onclick^="saveVoucher"], [data-uat-ro] #b1-save-btn, [data-uat-ro] #btn-vol-manage,
+[data-uat-ro] button[onclick^="showApprConfirm"], [data-uat-ro] button[onclick^="confirmWithdraw"], [data-uat-ro] button[onclick^="submitAdminComment"],
+[data-uat-ro] button[onclick^="saveAccApproverChange"], [data-uat-ro] button[onclick^="confirmDeleteDraft"], [data-uat-ro] button[onclick^="confirmApprAction"]
+  { opacity:.4 !important; pointer-events:none !important; filter:grayscale(1) }
+[data-uat-ro] #modal-b1docno { background:#f3f2f1 !important; color:#a19f9d !important; pointer-events:none }
 </style>
 <script>
 // ?openId= 단독 상세보기 모드 판별을 최대한 앞당긴다.
@@ -639,12 +645,9 @@ html.deeplink-open.deeplink-busy #deeplink-loader {
 
 <div id="uat-bar" style="position:sticky;top:0;z-index:900;background:#a4262c;color:#fff;text-align:center;
   padding:4px 12px;font-size:11px;font-weight:700;letter-spacing:.2px;line-height:1.35;font-family:inherit">
-  UAT 테스트 환경 — 실제 업무용이 아닙니다. 운영 시스템은 acc-voucher.startruckkorea.com 입니다.
+  UAT 테스트 환경 — 읽기 전용(조회만 가능) · 운영 시스템은 acc-voucher.startruckkorea.com 입니다.
   <span style="display:block;font-size:10.5px;font-weight:500;opacity:.9;margin-top:1px">
-    상신·결재를 포함한 모든 작업이 데이터베이스에 기록되지 않으며, 이 환경에서 작업한 내용은 어디에도 저장되지 않습니다.
-    작성한 전표는 이 브라우저 탭에서만 보이고 탭을 닫으면 사라집니다.
-    <a href="#" onclick="uatResetSandbox();location.reload();return false;"
-       style="color:#fff;text-decoration:underline;margin-left:6px">테스트 내용 비우기</a>
+    운영 데이터를 그대로 보여 주지만, 상신 · 임시저장 · 결재 · 철회 · B1 Doc No. 입력 등 모든 저장 · 수정은 되지 않습니다.
   </span>
 </div>
 <div id="login-screen">
@@ -1527,6 +1530,17 @@ let _volConfigTag = '';   // acc_voucher_volumes.json 의 eTag. 파일이 바뀌
 // 리스트를 분리하기 전까지 UAT 에서는 설정 쓰기만 막는다.
 // 조회·상신·결재는 그대로 동작한다 (테스트 목적이므로 업무 흐름은 유지).
 const IS_UAT = true;
+/* UAT 읽기 전용(09-29 요청) — UAT 는 운영 목록을 그대로 읽어 보여 주되, 상신 · 임시저장 · 결재 · 철회 · B1 Doc No. · 결재 의견 ·
+   세대 관리 등 쓰기는 전부 막는다. 예전 샌드박스(가짜 성공 응답)는 시험자가 「실제로 상신됐다」 고 오해하게 했다.
+   막는 곳은 둘 — ① 화면: 쓰기 단추를 잠그고 누르면 안내, ② api(): GET 이 아닌 요청은 서버로 보내기 전에 오류. 운영은 IS_UAT 가 false 라 무관. */
+const UAT_READ_ONLY = IS_UAT;
+const UAT_RO_MSG = 'UAT 환경은 읽기 전용입니다 — 조회만 할 수 있습니다.';
+function uatReadOnlyGuard(what) {
+  if (!UAT_READ_ONLY) return false;
+  showAccAlert('UAT 읽기 전용', (what ? what + '은(는) ' : '') + 'UAT 에서는 할 수 없습니다. 조회만 가능하며, 실제 작업은 운영 시스템(acc-voucher.startruckkorea.com)에서 해 주세요.', '🔒');
+  return true;
+}
+if (UAT_READ_ONLY) document.documentElement.setAttribute('data-uat-ro', '1');   // 쓰기 단추 잠금(CSS)
 async function _getConfigDocDrive() {
   if(!siteId){const s=await api('/sites/'+SITE_PATH_DB);siteId=s.id;}
   const drivesRes = await api('/sites/' + siteId + '/drives');
@@ -2194,6 +2208,8 @@ function uatHandle(path, method, body) {
 }
 
 async function api(path,method='GET',body=null,_retry=0, _spent=0) {
+  // UAT 읽기 전용: 쓰기 요청은 서버로도, 샌드박스로도 보내지 않는다.
+  if (UAT_READ_ONLY && method !== 'GET') { console.warn(`[UAT] 읽기 전용 — ${method} ${String(path).slice(0,90)}`); throw new Error(UAT_RO_MSG); }
   // UAT: 두 목록은 서버로 나가지 않고 브라우저 샌드박스에서 처리한다 (읽기도 포함).
   if (IS_UAT) {
     const r = uatHandle(path, method, body);
@@ -4497,6 +4513,7 @@ function onPurposeTitleInput(){
 }
 
 async function saveVoucher(status) {
+  if (uatReadOnlyGuard(status === DRAFT_STATUS ? '임시저장' : '상신')) return;
   const _isDraft = (status === DRAFT_STATUS);
   await loadVolumeConfig();
   applyCurrentVolume(); // 신규 전표는 항상 "현재 활성 볼륨"에 저장 — 직전에 다른 볼륨 전표를 조회/처리했더라도 여기서 다시 현재 볼륨으로 고정
@@ -5634,6 +5651,7 @@ function renderApprovalQueue() {
 
 let _pendingAppr = null;
 function showApprConfirm(apprId, action, reqId, aprCode) {
+  if (uatReadOnlyGuard('결재(' + action + ')')) return;
   _pendingAppr = {apprId, action, reqId, aprCode};
   const isReject = action === '반려';
   document.getElementById('appr-confirm-title').textContent = isReject ? '❌ 반려 확인' : '✅ 승인 확인';
@@ -5649,6 +5667,7 @@ function closeApprConfirm() {
   document.getElementById('appr-confirm-modal').style.display = 'none';
 }
 async function confirmApprAction() {
+  if (uatReadOnlyGuard('결재')) return;
   if(!_pendingAppr) return;
   const {apprId, action, reqId, aprCode} = _pendingAppr;
   const comment = document.getElementById('appr-confirm-comment').value.trim();
@@ -5771,6 +5790,7 @@ function renderVolListSelect() {
 }
 
 function openVolumeModal() {
+  if (uatReadOnlyGuard('세대 관리')) return;
   const rawUserEmail = (user?.email||user?.username||'').toLowerCase();
   if(!IT_EMAILS.map(e=>e.toLowerCase()).includes(rawUserEmail)){
     showAccAlert('접근 권한이 없습니다', 'Approvals 세대 관리는 IT 담당자만 사용할 수 있습니다.', '🔒');
@@ -6357,6 +6377,7 @@ async function exportAdminExcel(){
 }
 
 async function saveB1Doc(spId, b1DocNo, postingDone) {
+  if (uatReadOnlyGuard('B1 Doc No. / Posting 저장')) return;
   if(!siteId){const s=await api('/sites/'+SITE_PATH_DB);siteId=s.id;}
   try {
     const updatedBy = user?.email||user?.username||'';
@@ -6434,6 +6455,7 @@ function closeAccApproverChange(){
   _accChgCtx = null;
 }
 async function saveAccApproverChange(){
+  if (uatReadOnlyGuard('결재자 변경')) return;
   if(!_accChgCtx) return;
   const sel = document.getElementById('acc-chg-person');
   const email = sel.value;
@@ -6771,6 +6793,7 @@ function draftSoftIssues() {
   return issues;
 }
 function askDraftSubmit() {
+  if (uatReadOnlyGuard('임시저장')) return;
   const type = (document.getElementById('v-type')?.value || '').trim();
   const ptit = (document.getElementById('v-purpose-title')?.value || '').trim();
   // 목록에서 구분해야 하므로 이 둘은 임시저장에도 필요하다. 팝업을 열기 전에 먼저 확인한다.
@@ -7128,6 +7151,7 @@ async function resumeDraft(spId) {
 }
 
 function confirmDeleteDraft(spId) {
+  if (uatReadOnlyGuard('임시저장 삭제')) return;
   if (!confirm('이 임시저장 전표를 삭제하시겠습니까?\n삭제 후에는 되돌릴 수 없습니다.')) return;
   deleteDraft(spId);
 }
@@ -7193,6 +7217,7 @@ async function deleteDraft(spId) {
 
 // ── Withdraw (철회) — GW와 동일 패턴: APR 전체 먼저 잠금 → REQ 철회 처리 (race condition 방지) ──
 function confirmWithdraw(spId) {
+  if (uatReadOnlyGuard('철회')) return;
   if(!confirm('정말 이 전표를 철회하시겠습니까?\n철회 후에는 되돌릴 수 없습니다.')) return;
   withdrawRequest(spId);
 }
@@ -7991,6 +8016,7 @@ async function pkfBlockedFor(spId) {
 }
 
 async function saveB1DocFromModal() {
+  if (uatReadOnlyGuard('B1 Doc No. / Posting 저장')) return;
   console.log('[B1] 저장 시작 — 이 줄이 안 보이면 옛 화면(캐시)입니다. Ctrl+Shift+R 필요');
   const btn = document.getElementById('b1-save-btn');
   try {
@@ -8079,6 +8105,7 @@ async function loadAdminComments(reqSpId) {
 }
 
 async function submitAdminComment(reqSpId) {
+  if (uatReadOnlyGuard('결재 의견')) return;
   if (window._currentVoucherDetail && window._currentVoucherDetail._srcDraft) {
     showAccAlert('임시저장 전표입니다', '관리자 코멘트는 상신된 전표에만 남길 수 있습니다.', '⚠️');
     return;
